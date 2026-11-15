@@ -37,6 +37,14 @@ Read `INTEND.md` (product + rules) and the approved plan before changing behavio
 - Form inputs must use `form.fields.x.as('text' | 'number' | 'hidden' | ...)`; manual `name`s are
   rejected. Booleans in form schemas must be `v.optional(v.boolean(), false)`. Fields starting
   with `_` (e.g. `_password`) are never echoed back.
+- Remote forms only accept fields whose name carries the form-id suffix that `fields.x.as(...)`
+  generates (`name/<id>`); anything else is rejected. A native radio group inside a remote form
+  therefore cannot use a hand-written `name`: keep the choice in local state (custom
+  `role="radio"` buttons) and submit it through a hidden input that uses the generated name,
+  `name={fields.x.as('hidden', '').name}` (see `src/routes/host/CreateGameForm.svelte`).
+- Do not spread a remote field's `value` onto an input (`{...fields.x.as('text')}` includes
+  `value`): when the page hydrates it overwrites what the user typed before hydration. Drop
+  `value` from the spread and keep the text in a local `bind:value` (see `/join/[code]`).
 - `error(status, message)` takes a string message only. `json()`/`text()` are deprecated: use
   `Response.json(...)` / `new Response(...)`. `$app/stores` is gone: use `$app/state`.
 - When unsure, read `node_modules/@sveltejs/kit/types/index.d.ts` or
@@ -51,8 +59,9 @@ pnpm seed                 # idempotent sample content: 16 locations, 2 playlists
 pnpm dev                  # http://localhost:5173
 pnpm check                # svelte-check, must stay at 0 errors
 pnpm test:unit            # vitest, files src/**/*.test.ts (some need the DB running)
-pnpm test:e2e             # playwright (builds + previews on :4173), files **/*.e2e.ts
+pnpm test:e2e             # playwright: builds, runs the adapter-node server on :4173, files **/*.e2e.ts
 pnpm build                # adapter-node → build/ ; run with: node --env-file=.env build
+pnpm dev:lan              # dev server reachable from phones on the LAN (ORIGIN = LAN address)
 ```
 
 Admin password for dev is in `.env` (`ADMIN_PASSWORD`). Login page: `/login?next=/host`.
@@ -84,8 +93,11 @@ src/routes/                   / · /join/[code] · /play/[code] · /host · /hos
                               /admin/... · /login · /mcp · /media/[...key] · /map/[file]
 scripts/seed.ts               pnpm seed
 drizzle/                      generated SQL migrations (committed)
-e2e/                          playwright tests
+src/lib/surface.ts            route → <html data-surface> + viewport (server hook and root layout)
+e2e/                          playwright tests; e2e/helpers/ is the one shared helper library
+                              (remote-function client, db fixtures, simulated players/TV, phones)
 data/                         runtime data (gitignored): media/, map/world.pmtiles
+Dockerfile, compose.prod.yaml production image and stack (see README)
 ```
 
 ## Conventions
@@ -104,3 +116,15 @@ data/                         runtime data (gitignored): media/, map/world.pmtil
   `app.css`; a unit test keeps them in sync.
 - Files that are stubs throw `Not implemented` (server modules) or `error(501)` (remote
   functions). Their exported names and signatures are the contract; keep them when filling bodies.
+
+## Testing notes
+
+- e2e runs against the production server (`node build`), never `vite preview`: preview gzips
+  responses, which buffers the live-query event streams. Production refuses remote calls without
+  a same-origin `Origin` header; `e2e/helpers/remote.ts` sends one and throws on every error.
+- Remote ids are `<djb2 of the module path>/<export>` in dev and in builds (`remoteId()`).
+- Wait for `html[data-hydrated="true"]` before interacting with a page (set by the root layout),
+  not for network idle.
+- `e2e/full-game.e2e.ts` runs as its own project after the rest (its sudden death picks any
+  library location and it restarts a private server); iterate with
+  `pnpm test:e2e e2e/full-game.e2e.ts --no-deps`.

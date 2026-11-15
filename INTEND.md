@@ -151,3 +151,22 @@ attaching a photo by URL. There are no game-control tools.
 - Player limit per game (the reveal shows all pins at once, so very large rooms may clutter).
 - Join code and pairing code format and lifetime.
 - Whether the admin UI should warn when a playlist's locations lack one of the two languages.
+
+## Implementation notes
+
+Decisions that changed or were settled while building it:
+
+- **One login page.** Admin and host share `/login` (`?next=` returns to where you were) instead
+  of separate login screens.
+- **Admin places points itself.** Locations get their point by pasted coordinates (or a maps
+  link) or a click on our own labels-free map; there is no geocoding or external map service.
+- **Engine timing guards.** The round timer fires shortly after the deadline so a last cross
+  position still counts; a disconnect only affects the "everyone locked in" early finish after a
+  short grace; after a server restart phones get a few seconds to reconnect before it applies; a
+  running round keeps its deadline across restarts.
+- **Nobody wins if nobody won a round.** A game where no round had a winner ends without a winner
+  rather than a shared win between everyone.
+- **The TV re-pairs after a game.** When a game finishes, the big screen shows a new pairing code
+  next to the final standings, so the host can pair the same screen with the next game.
+- **Phones wait for the TV.** A phone shows the answer and its own result at the moment the big
+  screen shows the place name, not earlier.
