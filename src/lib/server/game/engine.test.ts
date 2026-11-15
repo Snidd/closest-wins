@@ -3,7 +3,7 @@
  * locations, playlist, games and TVs and deletes exactly those afterwards. Clock and timers are
  * fake (testkit.ts), so rounds "last" 30 s without anyone waiting.
  */
-import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { and, eq } from 'drizzle-orm';
 import { client, db } from '#lib/server/db/index.ts';
 import { game, gameRound, guess, player } from '#lib/server/db/schema.ts';
@@ -27,9 +27,11 @@ import {
 	resolvePlayer,
 	resolveTv,
 	skipReveal,
+	startEngine,
 	startRound,
 	updateGuess,
 	DISCONNECT_GRACE_MS,
+	RETRY_BASE_MS,
 	ROUND_END_GRACE_MS,
 	type EngineEvent
 } from './engine.ts';
@@ -52,6 +54,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+	vi.restoreAllMocks();
 	stopEvents();
 	for (const leave of presence.splice(0)) leave();
 	await fx.cleanup();
@@ -608,6 +611,42 @@ describe('restart recovery', () => {
 		expect(await phaseOf(gameId)).toBe('round');
 		await fx.clock.advance(10_000);
 		expect(await phaseOf(gameId)).toBe('reveal'); // Second never came back
+	});
+});
+
+describe('database failures', () => {
+	it('a round timer that fails to end the round retries with backoff', async () => {
+		const { gameId, joinCode } = await newGame(1);
+		await join(joinCode, 'Patient');
+		await startRound(gameId);
+		const quiet = vi.spyOn(console, 'error').mockImplementation(() => {});
+		const tx = vi.spyOn(db, 'transaction').mockRejectedValueOnce(new Error('connection reset'));
+		await fx.clock.advance(TIMER_S * 1000 + ROUND_END_GRACE_MS);
+		expect(tx).toHaveBeenCalledTimes(1);
+		expect(quiet).toHaveBeenCalled();
+		expect(await phaseOf(gameId)).toBe('round'); // the blip
+		expect(armedRoundTimers().get(gameId)).toBeDefined(); // ... but the timer is armed again
+		await fx.clock.advance(RETRY_BASE_MS);
+		expect(await phaseOf(gameId)).toBe('reveal');
+		expect(roundEnds()).toEqual([expect.objectContaining({ reason: 'timer' })]);
+		expect(armedRoundTimers().has(gameId)).toBe(false);
+	});
+
+	it('a failed engine start is retried until it succeeds', async () => {
+		const { gameId, joinCode } = await newGame(1);
+		await join(joinCode, 'Booter');
+		await startRound(gameId);
+		resetEngineMemory(); // "restart"
+		vi.spyOn(console, 'error').mockImplementation(() => {});
+		vi.spyOn(db, 'select').mockImplementationOnce(() => {
+			throw new Error('database not up yet');
+		});
+		await startEngine({ gameIds: [gameId] });
+		expect(armedRoundTimers().has(gameId)).toBe(false);
+		await fx.clock.advance(RETRY_BASE_MS);
+		expect(armedRoundTimers().has(gameId)).toBe(true);
+		await fx.clock.advance(TIMER_S * 1000);
+		expect(await phaseOf(gameId)).toBe('reveal');
 	});
 });
 

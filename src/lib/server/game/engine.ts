@@ -8,8 +8,9 @@
  *   `FOR SHARE` lock on the game row, so they never interleave with a round ending.
  *   After commit, `notifyGame(gameId)` wakes the live queries.
  * - `ends_at` is server-authoritative. One timer per running round (fires `ROUND_END_GRACE_MS`
- *   after `ends_at` so a last debounced cross position can still land); `initEngine()` re-arms
- *   timers at boot and ends rounds whose deadline already passed.
+ *   after `ends_at` so a last debounced cross position can still land; retries with backoff if
+ *   ending the round fails); `startEngine()` re-arms timers at boot (retrying until the database
+ *   answers) and ends rounds whose deadline already passed.
  * - A round also ends early when every eligible, connected, non-kicked player has locked in
  *   (checked after each lock-in, kick and, debounced, presence change).
  * - Callers are authenticated by the remote functions before calling in here.
@@ -70,6 +71,14 @@ export const ROUND_END_GRACE_MS = 500;
 export const DISCONNECT_GRACE_MS = 3000;
 /** After a restart, give phones this long to reconnect before the early-finish rule applies. */
 export const BOOT_PRESENCE_GRACE_MS = 10_000;
+/** First retry delay after a failed round end or engine init (doubles per failure, capped). */
+export const RETRY_BASE_MS = 1000;
+export const RETRY_MAX_MS = 30_000;
+
+/** Backoff for the `failures`-th consecutive failure (0-based). */
+export function retryDelay(failures: number): number {
+	return Math.min(RETRY_MAX_MS, RETRY_BASE_MS * 2 ** Math.min(failures, 16));
+}
 
 export type GameErrorCode =
 	| 'NOT_FOUND'
@@ -113,6 +122,7 @@ export function gameErrorStatus(code: GameErrorCode): number {
 const roundTimers = new Map<string, { roundId: string; handle: TimerHandle }>();
 const presenceChecks = new Map<string, TimerHandle>();
 let bootGraceUntil = 0;
+let initRetry: TimerHandle | null = null;
 
 /** Lifecycle events, for logs and tests. */
 export type EngineEvent =
@@ -151,11 +161,26 @@ function applyEffects(gameId: string, fx: Effects) {
 
 function armRoundTimer(gameId: string, roundId: string, endsAt: number) {
 	disarmRoundTimer(gameId);
-	const delay = endsAt - deps.now() + ROUND_END_GRACE_MS;
+	setRoundTimer(gameId, roundId, endsAt - deps.now() + ROUND_END_GRACE_MS, 0);
+}
+
+/**
+ * The round's end timer. If ending the round fails (e.g. a database blip) it re-arms itself
+ * with backoff, so a round never stays open past `endsAt`; it stops once the round has ended or
+ * is no longer current (`endRoundIfDue` is then a no-op) or another timer replaced it.
+ */
+function setRoundTimer(gameId: string, roundId: string, delayMs: number, failures: number) {
 	const handle = deps.setTimer(async () => {
 		if (roundTimers.get(gameId)?.handle === handle) roundTimers.delete(gameId);
-		await endRoundIfDue(gameId, roundId);
-	}, delay);
+		try {
+			await endRoundIfDue(gameId, roundId);
+		} catch (e) {
+			const retryMs = retryDelay(failures);
+			console.error(`[engine] could not end round ${roundId}, retrying in ${retryMs} ms`, e);
+			// Unless a transition armed a new timer (or disarmed it) meanwhile.
+			if (!roundTimers.has(gameId)) setRoundTimer(gameId, roundId, retryMs, failures + 1);
+		}
+	}, delayMs);
 	roundTimers.set(gameId, { roundId, handle });
 }
 
@@ -253,12 +278,29 @@ export async function initEngine(options: { gameIds?: string[] } = {}): Promise<
 			try {
 				await endRoundIfDue(r.gameId, r.roundId);
 			} catch (e) {
-				console.error('[engine] could not end overdue round', r.roundId, e);
+				console.error('[engine] could not end overdue round, retrying', r.roundId, e);
+				setRoundTimer(r.gameId, r.roundId, retryDelay(0), 1);
 			}
 		} else {
 			armRoundTimer(r.gameId, r.roundId, endsAt);
 			schedulePresenceCheck(r.gameId, BOOT_PRESENCE_GRACE_MS);
 		}
+	}
+}
+
+/**
+ * `initEngine` at server start, retried with backoff until it succeeds (the database may not be
+ * reachable yet, and running rounds must get their timers back). Resolves after the first
+ * attempt; later attempts run in the background.
+ */
+export async function startEngine(options: { gameIds?: string[] } = {}, failures = 0): Promise<void> {
+	initRetry = null;
+	try {
+		await initEngine(options);
+	} catch (e) {
+		const retryMs = retryDelay(failures);
+		console.error(`[engine] init failed, retrying in ${retryMs} ms`, e);
+		initRetry = deps.setTimer(() => startEngine(options, failures + 1), retryMs);
 	}
 }
 
@@ -876,6 +918,8 @@ export function resetEngineMemory(): void {
 	for (const h of presenceChecks.values()) deps.clearTimer(h);
 	roundTimers.clear();
 	presenceChecks.clear();
+	if (initRetry !== null) deps.clearTimer(initRetry);
+	initRetry = null;
 	bootGraceUntil = 0;
 }
 

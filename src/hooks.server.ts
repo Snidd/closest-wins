@@ -3,7 +3,7 @@ import { building, dev } from '$app/env';
 import { client } from '#lib/server/db/index.ts';
 import { isAdminSession } from '#lib/server/auth/index.ts';
 import { detectLocale } from '#lib/i18n/locale.ts';
-import { initEngine, resetEngineMemory } from '#lib/server/game/engine.ts';
+import { resetEngineMemory, startEngine } from '#lib/server/game/engine.ts';
 import { endAllStreams } from '#lib/server/game/events.ts';
 import { surfaceFor, viewportFor } from '#lib/surface.ts';
 
@@ -31,12 +31,9 @@ function handleShutdown() {
 export const init: ServerInit = async () => {
 	if (building) return;
 	if (!dev) handleShutdown();
-	// Re-arm timers of rounds that were running when the process stopped.
-	try {
-		await initEngine();
-	} catch (e) {
-		console.error('[engine] init failed', e);
-	}
+	// Re-arm timers of rounds that were running when the process stopped (retried with backoff
+	// in the background if the database is not reachable yet).
+	await startEngine();
 };
 
 export const handle: Handle = async ({ event, resolve }) => {
