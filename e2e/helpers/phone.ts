@@ -227,5 +227,6 @@ export async function steerTo(
 		await stroke(page, fx, fy);
 		view = await waitForNewView(page, key, before);
 	}
+	await page.screenshot({ path: `test-results/steer-failed-${Date.now()}.png` }).catch(() => {});
 	throw new Error(`could not steer the map to ${target.lat},${target.lng}: ${log.join(' | ')}`);
 }

@@ -312,7 +312,8 @@ async function setUpGame(
 	baseURL: string,
 	playlistName: string,
 	players: Array<[string, Locale]>,
-	track: { games: Set<string>; tvs: Set<string> }
+	track: { games: Set<string>; tvs: Set<string> },
+	seconds = TIMER
 ): Promise<Setup> {
 	const contexts: BrowserContext[] = [];
 	const hostCtx = await browser.newContext({
@@ -329,7 +330,7 @@ async function setUpGame(
 	const { gameId, code } = await createGameViaUi(host, {
 		playlist: playlistName,
 		rounds: 3,
-		seconds: TIMER,
+		seconds,
 		onCreated: (id) => track.games.add(id)
 	});
 
@@ -553,11 +554,188 @@ test('a whole game on five real screens: three rounds, a tie, sudden death and o
 	}
 });
 
+// --- Scenario 2: late joiner, reload, kick and a server restart, on a private server ----------------
+
+const PRIVATE_PORT = 4174;
+const PRIVATE_URL = `http://localhost:${PRIVATE_PORT}`;
+
+/** The production build on its own port, so this test can stop and restart it. */
+class PrivateServer {
+	private proc: ChildProcess | null = null;
+	log = '';
+
+	async start() {
+		const proc = spawn(process.execPath, ['build'], {
+			env: {
+				...process.env,
+				PORT: String(PRIVATE_PORT),
+				HOST: '127.0.0.1',
+				ORIGIN: PRIVATE_URL,
+				BODY_SIZE_LIMIT: '16M'
+			},
+			stdio: ['ignore', 'pipe', 'pipe']
+		});
+		this.proc = proc;
+		await new Promise<void>((resolve, reject) => {
+			const timer = setTimeout(() => reject(new Error(`server did not start: ${this.log}`)), 20_000);
+			const onData = (d: Buffer) => {
+				this.log += d.toString();
+				if (this.log.includes('Listening on')) {
+					clearTimeout(timer);
+					resolve();
+				}
+			};
+			proc.stdout!.on('data', onData);
+			proc.stderr!.on('data', (d: Buffer) => (this.log += d.toString()));
+			proc.once('exit', (code) => reject(new Error(`server exited (${code}): ${this.log}`)));
+		});
+	}
+
+	/** SIGTERM, like `docker stop`; resolves with how long the process took to exit. */
+	async stop(): Promise<number> {
+		const proc = this.proc;
+		if (!proc || proc.exitCode !== null) return 0;
+		const t0 = Date.now();
+		const exited = new Promise<void>((resolve) => proc.once('exit', () => resolve()));
+		proc.kill('SIGTERM');
+		await Promise.race([exited, new Promise((r) => setTimeout(r, 15_000))]);
+		if (proc.exitCode === null && proc.signalCode === null) proc.kill('SIGKILL');
+		this.proc = null;
+		return Date.now() - t0;
+	}
+}
+
+test('mid-game: a reload, a kick, a late joiner and a server restart during a round', async ({ browser }) => {
+	test.skip(!!process.env.E2E_BASE_URL || !existsSync('build/index.js'), 'needs the production build (pnpm test:e2e)');
+	test.setTimeout(300_000);
+	const server = new PrivateServer();
+	await server.start();
+	const admin = await Admin.login(PRIVATE_URL);
+	const tag = Math.random().toString(36).slice(2, 7);
+	const listName = `Mid-game ${tag}`;
+	await admin.createPlaylist([SEED.giza, SEED.liberty, SEED.sydney], { en: listName, sv: `Mitt i ${tag}`, timerSeconds: 180 });
+	const track = { games: new Set<string>(), tvs: new Set<string>() };
+	let contexts: BrowserContext[] = [];
+	try {
+		const setup = await setUpGame(
+			browser,
+			PRIVATE_URL,
+			listName,
+			[
+				['Anna', 'en'],
+				['Ben', 'en'],
+				['Cleo', 'en']
+			],
+			track,
+			// Rounds here must outlast steering, a restart and the checks around it.
+			180
+		);
+		contexts = setup.contexts;
+		const { screens: s, gameId, code } = setup;
+		const { host, tv } = s;
+		const pages = () => [tv, ...s.phones.map((p) => p.page)];
+
+		// --- Round 1: Ben reloads his phone mid-round and keeps his cross ------------------------
+		await s.hostPrimary('Start game');
+		await s.phase('round');
+		let r = await roundState(gameId);
+		const ben = s.phone('Ben');
+		await steerTo(ben.page, gameId, r.index, offset(r.target, 4, 0));
+		await expect.poll(async () => (await db()`
+			select g.touched from guess g join game_round gr on gr.id = g.round_id
+			where gr.game_id = ${gameId} and gr.index = ${r.index} and g.player_id = ${ben.id}`)[0]?.touched).toBe(true);
+		await ben.page.reload();
+		await expect(ben.page.getByTestId('round')).toHaveAttribute('data-touched', 'true', { timeout: 15_000 });
+		await expect(ben.page.getByTestId('lock-in')).toBeEnabled();
+		await s.lockIn('Ben');
+		await steerTo(s.phone('Anna').page, gameId, r.index, offset(r.target, 1, 0));
+		await s.lockIn('Anna');
+		await s.locked(['Anna', 'Ben'], ['Anna', 'Ben', 'Cleo']);
+		await expectNoAnswer(pages(), r.target);
+
+		// --- The host removes Cleo: her phone says so, the round ends (everyone left locked in) --
+		await s.watchReveal();
+		await host.getByTestId('menu-button').click();
+		await host.getByRole('button', { name: 'Remove Cleo' }).click();
+		await host.getByRole('button', { name: 'Yes, remove' }).click();
+		const cleo = s.phone('Cleo');
+		await expect(cleo.page.getByTestId('gate-kicked')).toBeVisible();
+		s.phones.splice(s.phones.indexOf(cleo), 1);
+		await host.keyboard.press('Escape');
+		await s.reveal(r.target);
+		await s.results(gameId, ['Anna'], []);
+		await expect(tv.locator(`[data-player-id="${cleo.id}"]`)).toHaveCount(0);
+
+		// --- Between rounds: Dana joins late from the TV's QR and plays the next round ------------
+		await s.hostPrimary('Show standings');
+		await s.phase('standings');
+		const { context: danaCtx, page: danaPage } = await newPhone(browser);
+		contexts.push(danaCtx);
+		await danaPage.goto(`${PRIVATE_URL}/join/${code}`);
+		await submitNickname(danaPage, code, 'Dana');
+		const [danaRow] = await db()<{ id: string; color: string }[]>`
+			select id, color from player where game_id = ${gameId} and nickname = 'Dana'`;
+		s.phones.push({ nick: 'Dana', locale: 'en', page: danaPage, id: danaRow!.id, color: danaRow!.color });
+		await expect(tv.getByTestId('standings-row')).toHaveCount(3);
+		await expect(host.getByTestId('standing-row')).toHaveCount(3);
+		await s.standings(gameId, { Anna: 1, Ben: 0, Dana: 0 });
+
+		await s.hostPrimary('Start round 2');
+		await s.phase('round');
+		await s.roundLabel(2);
+		r = await roundState(gameId);
+		await s.locked([], ['Anna', 'Ben', 'Dana']);
+		await steerTo(s.phone('Anna').page, gameId, r.index, offset(r.target, 0, 3));
+		await s.lockIn('Anna');
+		await s.locked(['Anna'], ['Anna', 'Ben', 'Dana']);
+		const [before] = await db()<{ ends_at: Date }[]>`
+			select ends_at from game_round where game_id = ${gameId} and index = ${r.index}`;
+
+		// --- The server restarts mid-round (SIGTERM, like a deploy) -------------------------------
+		const stopMs = await server.stop();
+		expect(stopMs, 'shutdown with open event streams').toBeLessThan(5000);
+		await expect(tv.getByTestId('tv-offline')).toBeVisible({ timeout: 10_000 });
+		await expect(host.getByTestId('connection')).toHaveAttribute('data-state', 'offline', { timeout: 10_000 });
+		await expect(ben.page.getByTestId('connection-badge')).toBeVisible({ timeout: 10_000 });
+		await server.start();
+		for (const p of s.phones) {
+			await expect(p.page.getByTestId('connection-badge'), p.nick).toHaveCount(0, { timeout: 20_000 });
+		}
+
+		// Every screen reconnects by itself, to the same round, with Anna still locked in.
+		await expect(tv.getByTestId('tv-offline')).toHaveCount(0, { timeout: 30_000 });
+		await expect(host.getByTestId('connection')).toHaveAttribute('data-state', 'live', { timeout: 30_000 });
+		await s.phase('round');
+		await s.locked(['Anna'], ['Anna', 'Ben', 'Dana']);
+		const [after] = await db()<{ ends_at: Date }[]>`
+			select ends_at from game_round where game_id = ${gameId} and index = ${r.index}`;
+		expect(after!.ends_at.getTime()).toBe(before!.ends_at.getTime());
+
+		await steerTo(ben.page, gameId, r.index, offset(r.target, -6, 0));
+		await steerTo(danaPage, gameId, r.index, offset(r.target, 0, -12));
+		await s.watchReveal();
+		await s.lockIn('Ben');
+		await s.lockIn('Dana');
+		// Everyone locked in: the round ends (after the restart's reconnect grace at the latest).
+		await s.reveal(r.target);
+		await s.results(gameId, ['Anna'], []);
+
+		// --- The host ends the game early from the menu -----------------------------------------
+		await host.getByTestId('menu-button').click();
+		await host.getByTestId('end-game').click();
+		await host.getByTestId('end-game-confirm').click();
+		await s.phase('finished');
+		await expect(tv.getByTestId('finished-screen')).toHaveAttribute('data-winners', s.phone('Anna').id);
+		expect(await dbGame(gameId)).toMatchObject({ phase: 'finished' });
+	} finally {
+		for (const c of contexts) await c.close().catch(() => {});
+		await deleteGames(track.games);
+		await deleteTvs(track.tvs);
+		await admin.cleanupContent();
+		await server.stop();
+	}
+});
+
 test.afterAll(async () => {
 	await closeDb();
 });
-
-// Unused until scenario 2 lands.
-void spawn;
-void existsSync;
-export type { ChildProcess };
