@@ -21,7 +21,7 @@
 
 <Shell testid="lobby">
 	{#snippet label()}
-		<span class="code-chip">{tc().joinCode} <strong class="code">{s.game.joinCode}</strong></span>
+		<span class="code-chip">{tc().joinCode} <strong class="code u-code">{s.game.joinCode}</strong></span>
 	{/snippet}
 
 	<section class="hero">

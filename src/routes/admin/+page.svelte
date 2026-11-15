@@ -55,7 +55,7 @@
 	</a>
 </div>
 
-<div class="row actions">
+<div class="u-row actions">
 	<Button href="/admin/locations/new">+ {t().newLocation}</Button>
 	<Button href="/admin/playlists/new" variant="secondary">+ {t().newPlaylist}</Button>
 </div>

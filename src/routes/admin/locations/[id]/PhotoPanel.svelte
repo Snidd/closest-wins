@@ -92,7 +92,7 @@
 				<span class="muted">{t().photoSize(photo.width, photo.height)}</span>
 			</figcaption>
 		</figure>
-		<div class="row buttons">
+		<div class="u-row buttons">
 			<Button variant="secondary" size="sm" onclick={() => (picking = true)}>{t().replacePhoto}</Button>
 			<Button variant="ghost" size="sm" onclick={() => onchange(null)}>{t().removePhoto}</Button>
 		</div>
@@ -125,7 +125,7 @@
 			aria-labelledby="tab-upload"
 			hidden={tab !== 'upload'}
 			enctype="multipart/form-data"
-			class="stack"
+			class="u-stack"
 			novalidate
 		>
 			<div class="field">
@@ -154,7 +154,7 @@
 			{#each uploadIssues.filter((i) => i.path.length === 0 || i.path[0] === 'file') as issue (issue.message)}
 				<p class="issue" role="alert">{issue.message}</p>
 			{/each}
-			<div class="row buttons">
+			<div class="u-row buttons">
 				<Button type="submit" size="sm" busy={uploadPhoto.pending > 0}>
 					{uploadPhoto.pending > 0 ? t().uploading : t().upload}
 				</Button>
@@ -170,7 +170,7 @@
 			role="tabpanel"
 			aria-labelledby="tab-url"
 			hidden={tab !== 'url'}
-			class="stack"
+			class="u-stack"
 			novalidate
 		>
 			<TextInput
@@ -195,7 +195,7 @@
 				placeholder="https://"
 			/>
 			{#each importRootIssues as issue (issue.message)}<p class="issue" role="alert">{issue.message}</p>{/each}
-			<div class="row buttons">
+			<div class="u-row buttons">
 				<Button type="submit" size="sm" busy={importPhoto.pending > 0}>
 					{importPhoto.pending > 0 ? t().importing : t().importPhoto}
 				</Button>

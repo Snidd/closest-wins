@@ -144,7 +144,7 @@
 		</a>
 		{#if data.state === 'open' || data.state === 'unchecked'}
 			<span class="code-chip" data-testid="join-code-chip">
-				{t().joinCode} <strong class="code">{data.code}</strong>
+				{t().joinCode} <strong class="code u-code">{data.code}</strong>
 			</span>
 		{/if}
 	</header>

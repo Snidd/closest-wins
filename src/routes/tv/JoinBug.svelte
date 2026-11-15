@@ -19,7 +19,7 @@
 		<span class="label">{t().join}</span>
 		<span class="url">{shortJoinUrl(game.joinUrl)}</span>
 	</div>
-	<span class="code" aria-label="{t().joinCode} {game.joinCode}">{game.joinCode}</span>
+	<span class="code u-code" aria-label="{t().joinCode} {game.joinCode}">{game.joinCode}</span>
 </div>
 
 <style>

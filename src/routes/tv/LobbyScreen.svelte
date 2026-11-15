@@ -34,7 +34,7 @@
 			{t().orGoTo} <b class="url">{shortJoinUrl(snap.game.joinUrl)}</b>
 			{t().andEnter}
 		</p>
-		<p class="code" data-testid="join-code" aria-label="{t().joinCode} {snap.game.joinCode}">
+		<p class="code u-code" data-testid="join-code" aria-label="{t().joinCode} {snap.game.joinCode}">
 			{#each snap.game.joinCode.split('') as ch, i (i)}<span>{ch}</span>{/each}
 		</p>
 	</aside>

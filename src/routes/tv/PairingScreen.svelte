@@ -25,7 +25,7 @@
 	<div class="panel">
 		<p class="eyebrow">{t().pairingTitle}</p>
 		<div
-			class={['code', { pending: !code }]}
+			class={['code', 'u-code', { pending: !code }]}
 			data-testid="pairing-code"
 			data-code={code ?? ''}
 			role="img"

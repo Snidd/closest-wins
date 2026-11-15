@@ -132,7 +132,7 @@
 			<span class="muted">
 				{t().rangeOf((pageNo - 1) * PAGE_SIZE + 1, Math.min(pageNo * PAGE_SIZE, result.total), result.total)}
 			</span>
-			<div class="row">
+			<div class="u-row">
 				<Button
 					variant="secondary"
 					size="sm"

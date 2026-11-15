@@ -265,11 +265,12 @@ textarea {
 }
 
 /* ---------------------------------------------------------------------------------------------
- * Layout helpers
+ * Layout helpers. Global utility classes carry a `u-` prefix so they never restyle a
+ * component's own scoped `.row` / `.code` / … classes.
  * ------------------------------------------------------------------------------------------- */
 
 /** Standard page: mobile first, padded inside the safe area. */
-.page {
+.u-page {
 	min-height: 100dvh;
 	padding: calc(var(--space-4) + var(--safe-top)) calc(var(--space-4) + var(--safe-right))
 		calc(var(--space-4) + var(--safe-bottom)) calc(var(--space-4) + var(--safe-left));
@@ -278,19 +279,19 @@ textarea {
 	gap: var(--space-4);
 }
 
-.page--narrow {
+.u-page--narrow {
 	max-width: var(--content-max);
 	margin-inline: auto;
 	width: 100%;
 }
 
-.stack {
+.u-stack {
 	display: flex;
 	flex-direction: column;
 	gap: var(--stack-gap, var(--space-3));
 }
 
-.row {
+.u-row {
 	display: flex;
 	align-items: center;
 	gap: var(--row-gap, var(--space-3));
@@ -313,7 +314,7 @@ textarea {
 	border: 0;
 }
 
-.code {
+.u-code {
 	font-family: var(--font-mono);
 	letter-spacing: 0.12em;
 	font-weight: var(--weight-bold);
@@ -349,10 +350,11 @@ html[data-surface='play'] .scrollable {
 
 /*
  * TV: every rem scales with the viewport, so the whole UI (built in rem) grows on a big screen.
- * ~18px at 1280x720, ~27px at 1920x1080, capped at 56px (4K).
+ * ~18px at 1280x720, ~27px at 1920x1080, capped at 56px (4K). Also capped by the height
+ * (2.6vh), so very wide screens (21:9) do not overflow vertically; 16:9 is unchanged.
  */
 html[data-surface='tv'] {
-	font-size: clamp(16px, 1.15vw + 0.45vh, 56px);
+	font-size: min(clamp(16px, 1.15vw + 0.45vh, 56px), max(16px, 2.6vh));
 	overflow: hidden;
 }
 html[data-surface='tv'] body {

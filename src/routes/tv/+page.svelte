@@ -222,11 +222,6 @@
 			opacity: 0;
 		}
 	}
-	/* app.css scales the TV root font with the viewport width; cap it by the height too so very
-	   wide screens (21:9) do not overflow vertically. 16:9 is unchanged (2.6vh ≈ the width rule). */
-	:global(html[data-surface='tv']) {
-		font-size: min(clamp(16px, 1.15vw + 0.45vh, 56px), max(16px, 2.6vh));
-	}
 	.tv :global(h1),
 	.tv :global(p) {
 		margin: 0;
