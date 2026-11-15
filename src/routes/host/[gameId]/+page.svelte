@@ -439,8 +439,7 @@
 							{nextLabel}
 						</Button>
 					{:else}
-						<!-- Plain link: Button's <a> variant does not pass extra attributes through. -->
-						<a class="new-game" href="/host" data-testid="primary-action">{t().newGame}</a>
+						<Button href="/host" size="xl" block data-testid="primary-action">{t().newGame}</Button>
 					{/if}
 				</div>
 			{/key}
@@ -690,21 +689,6 @@
 		color: var(--color-danger-contrast);
 		font-weight: var(--weight-bold);
 		cursor: pointer;
-	}
-	.new-game {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		min-height: 4.25rem;
-		border-radius: var(--radius-lg);
-		background: var(--color-primary);
-		color: var(--color-primary-contrast);
-		font-size: var(--text-xl);
-		font-weight: var(--weight-bold);
-		text-decoration: none;
-	}
-	.new-game:hover {
-		background: var(--color-primary-hover);
 	}
 	.dock :global(.sd-button),
 	.dock :global(.sd-button:hover:not(:disabled)) {

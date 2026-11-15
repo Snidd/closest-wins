@@ -1,10 +1,11 @@
 <!--
-  Button (or link styled as a button when `href` is set). Extra attributes are passed through,
-  so remote form helpers work: <Button {...myForm.fields.action.as('submit', 'go')}>Go</Button>
+  Button (or link styled as a button when `href` is set). Extra attributes (`data-testid`,
+  `aria-*`, handlers, …) are passed through in both cases, so remote form helpers work:
+  <Button {...myForm.fields.action.as('submit', 'go')}>Go</Button>
 -->
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import type { HTMLButtonAttributes } from 'svelte/elements';
+	import type { HTMLAnchorAttributes, HTMLButtonAttributes } from 'svelte/elements';
 
 	type Props = HTMLButtonAttributes & {
 		variant?: 'primary' | 'secondary' | 'danger' | 'ghost';
@@ -30,10 +31,34 @@
 		class: className,
 		...rest
 	}: Props = $props();
+
+	/** `rest` minus the attributes that only make sense on a <button>. */
+	const linkRest = $derived.by(() => {
+		const {
+			form: _form,
+			formaction: _formaction,
+			formenctype: _formenctype,
+			formmethod: _formmethod,
+			formnovalidate: _formnovalidate,
+			formtarget: _formtarget,
+			name: _name,
+			value: _value,
+			popovertarget: _popovertarget,
+			popovertargetaction: _popovertargetaction,
+			...link
+		} = rest;
+		return link as HTMLAnchorAttributes;
+	});
 </script>
 
 {#if href}
-	<a {href} class={['btn', variant, size, { block }, className]} aria-busy={busy || undefined}>
+	<!-- Button-only attributes (`type`, `disabled`, form*) do not apply to a link. -->
+	<a
+		{...linkRest}
+		{href}
+		class={['btn', variant, size, { block }, className]}
+		aria-busy={busy || undefined}
+	>
 		{@render children()}
 	</a>
 {:else}
