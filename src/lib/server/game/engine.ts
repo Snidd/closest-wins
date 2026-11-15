@@ -11,8 +11,9 @@
  *   after `ends_at` so a last debounced cross position can still land; retries with backoff if
  *   ending the round fails); `startEngine()` re-arms timers at boot (retrying until the database
  *   answers) and ends rounds whose deadline already passed.
- * - A round also ends early when every eligible, connected, non-kicked player has locked in
- *   (checked after each lock-in, kick and, debounced, presence change).
+ * - A round also ends early when every eligible, present, non-kicked player has locked in
+ *   (checked after each lock-in, kick and disconnect). A player counts as present until they
+ *   have been disconnected for `DISCONNECT_GRACE_MS`.
  * - Callers are authenticated by the remote functions before calling in here.
  * - Expected failures throw `GameError`; remote functions map them to HTTP errors.
  */
@@ -120,7 +121,9 @@ export function gameErrorStatus(code: GameErrorCode): number {
 // --- In-memory state (timers only; everything else is in Postgres) -----------------------------
 
 const roundTimers = new Map<string, { roundId: string; handle: TimerHandle }>();
-const presenceChecks = new Map<string, TimerHandle>();
+const presenceChecks = new Map<string, { handle: TimerHandle; at: number }>();
+/** gameId → playerId → when the player's last stream closed (kept for `DISCONNECT_GRACE_MS`). */
+const disconnectedAt = new Map<string, Map<string, number>>();
 let bootGraceUntil = 0;
 let initRetry: TimerHandle | null = null;
 
@@ -142,11 +145,14 @@ interface Effects {
 	events: EngineEvent[];
 	disarm: boolean;
 	arm: { roundId: string; endsAt: number } | null;
+	/** Re-check the early finish after this many ms (a disconnect grace period runs out). */
+	recheckInMs: number | null;
 }
 
 function applyEffects(gameId: string, fx: Effects) {
 	if (fx.disarm) disarmRoundTimer(gameId);
 	if (fx.arm) armRoundTimer(gameId, fx.arm.roundId, fx.arm.endsAt);
+	if (fx.recheckInMs !== null && !fx.disarm) schedulePresenceCheck(gameId, fx.recheckInMs);
 	for (const key of fx.notify) notifyGame(key);
 	for (const e of fx.events) {
 		for (const l of [...engineListeners]) {
@@ -192,26 +198,68 @@ function disarmRoundTimer(gameId: string) {
 	}
 	const p = presenceChecks.get(gameId);
 	if (p !== undefined) {
-		deps.clearTimer(p);
+		deps.clearTimer(p.handle);
 		presenceChecks.delete(gameId);
 	}
 }
 
+/**
+ * Runs the early-finish check in `delayMs`, unless one is already due sooner (each check
+ * schedules the next one itself while someone's disconnect grace is still running, so the
+ * earliest is enough and a flapping connection cannot postpone it).
+ */
 function schedulePresenceCheck(gameId: string, delayMs: number) {
+	const at = deps.now() + Math.max(0, delayMs);
 	const existing = presenceChecks.get(gameId);
-	if (existing !== undefined) deps.clearTimer(existing);
+	if (existing && existing.at <= at) return;
+	if (existing) deps.clearTimer(existing.handle);
 	const handle = deps.setTimer(async () => {
-		if (presenceChecks.get(gameId) === handle) presenceChecks.delete(gameId);
+		if (presenceChecks.get(gameId)?.handle === handle) presenceChecks.delete(gameId);
 		await finishIfAllLocked(gameId);
 	}, delayMs);
-	presenceChecks.set(gameId, handle);
+	presenceChecks.set(gameId, { handle, at });
 }
 
-// A player's stream opened or closed: re-check the early finish once things settle.
-onPresenceChange((gameId, key) => {
-	if (key.startsWith('player:') && roundTimers.has(gameId)) {
-		schedulePresenceCheck(gameId, DISCONNECT_GRACE_MS);
+/**
+ * Players who count as present for the early finish: connected now, or disconnected less than
+ * `DISCONNECT_GRACE_MS` ago (a refresh or a network blip must not cost anyone their time).
+ * `graceEndsAt` is when the earliest of those grace periods runs out, if any.
+ */
+function presentPlayerIds(gameId: string): { ids: Set<string>; graceEndsAt: number | null } {
+	const now = deps.now();
+	const ids = connectedPlayerIds(gameId);
+	let graceEndsAt: number | null = null;
+	for (const [playerId, at] of disconnectedAt.get(gameId) ?? []) {
+		const ends = at + DISCONNECT_GRACE_MS;
+		if (ends <= now || ids.has(playerId)) continue;
+		ids.add(playerId);
+		graceEndsAt = graceEndsAt === null ? ends : Math.min(graceEndsAt, ends);
 	}
+	return { ids, graceEndsAt };
+}
+
+function pruneDisconnects(now: number) {
+	for (const [gameId, players] of disconnectedAt) {
+		for (const [playerId, at] of players) if (at + DISCONNECT_GRACE_MS <= now) players.delete(playerId);
+		if (players.size === 0) disconnectedAt.delete(gameId);
+	}
+}
+
+// A player's stream opened or closed. A disconnect starts the player's grace period; the early
+// finish is re-checked when it runs out.
+onPresenceChange((gameId, key, connected) => {
+	if (!key.startsWith('player:')) return;
+	const playerId = key.slice('player:'.length);
+	const now = deps.now();
+	pruneDisconnects(now);
+	if (connected) {
+		disconnectedAt.get(gameId)?.delete(playerId);
+		return;
+	}
+	let players = disconnectedAt.get(gameId);
+	if (!players) disconnectedAt.set(gameId, (players = new Map()));
+	players.set(playerId, now);
+	if (roundTimers.has(gameId)) schedulePresenceCheck(gameId, DISCONNECT_GRACE_MS);
 });
 
 /**
@@ -223,7 +271,7 @@ async function transition<T>(
 	fn: (tx: Transaction, g: Game, fx: Effects) => Promise<T>
 ): Promise<T> {
 	if (!isUuid(gameId)) throw new GameError('NOT_FOUND', 'Game not found');
-	const fx: Effects = { notify: new Set(), events: [], disarm: false, arm: null };
+	const fx: Effects = { notify: new Set(), events: [], disarm: false, arm: null, recheckInMs: null };
 	const result = await db.transaction(async (tx) => {
 		const [g] = await tx.select().from(game).where(eq(game.id, gameId)).for('update');
 		if (!g) throw new GameError('NOT_FOUND', 'Game not found');
@@ -442,15 +490,21 @@ async function endRoundTx(
 	fx.events.push({ type: 'phase', gameId: g.id, phase: 'reveal' });
 }
 
-/** In a transition: ends the round if every eligible connected player has locked in. */
+/**
+ * In a transition: ends the round if every eligible present player has locked in. "Present"
+ * includes players within their disconnect grace period (`presentPlayerIds`); while such a
+ * player keeps the round open, a re-check is scheduled for when their grace runs out. Every
+ * early-finish path (lock-in, kick, presence change, boot) goes through here.
+ */
 async function finishIfAllLockedTx(tx: Transaction, g: Game, fx: Effects): Promise<boolean> {
 	if (g.phase !== 'round') return false;
 	if (deps.now() < bootGraceUntil) return false;
 	const round = await lockCurrentRound(tx, g);
 	if (!round || round.endedAt || !round.startedAt) return false;
 	const players = await loadPlayers(tx, g.id);
-	const connected = connectedPlayerIds(g.id);
-	const waitingOn = eligibleIds(round, players).filter((id) => connected.has(id));
+	const present = presentPlayerIds(g.id);
+	if (present.graceEndsAt !== null) fx.recheckInMs = present.graceEndsAt - deps.now();
+	const waitingOn = eligibleIds(round, players).filter((id) => present.ids.has(id));
 	if (waitingOn.length === 0) return false;
 	const locked = await tx
 		.select({ playerId: guess.playerId })
@@ -915,9 +969,10 @@ export async function registerTv(
 /** Forgets all in-memory timers (simulates a process restart in tests). */
 export function resetEngineMemory(): void {
 	for (const t of roundTimers.values()) deps.clearTimer(t.handle);
-	for (const h of presenceChecks.values()) deps.clearTimer(h);
+	for (const p of presenceChecks.values()) deps.clearTimer(p.handle);
 	roundTimers.clear();
 	presenceChecks.clear();
+	disconnectedAt.clear();
 	if (initRetry !== null) deps.clearTimer(initRetry);
 	initRetry = null;
 	bootGraceUntil = 0;

@@ -422,6 +422,41 @@ describe('early finish and presence', () => {
 		expect(roundEnds()).toEqual([expect.objectContaining({ reason: 'allLocked' })]);
 	});
 
+	it('a player within the disconnect grace still counts when others lock in or are kicked', async () => {
+		const { gameId, joinCode } = await newGame(2);
+		const a = await join(joinCode, 'Quick');
+		const b = await join(joinCode, 'Blip');
+		const c = await join(joinCode, 'Kickme');
+		const l0 = fx.locations[0]!;
+		await startRound(gameId);
+		await place(c, 0, near(l0, 3), { lock: true });
+
+		// Bob's stream drops for a moment; Alice locks in and Cid is kicked meanwhile.
+		presence[1]!();
+		fx.clock.now += 1000;
+		await place(a, 0, near(l0, 1), { lock: true });
+		expect(await phaseOf(gameId)).toBe('round');
+		await kickPlayer(gameId, c.playerId);
+		expect(await phaseOf(gameId)).toBe('round');
+		// He is back within the grace period and keeps his remaining time.
+		presence.push(enterPresence(gameId, `player:${b.playerId}`));
+		await fx.clock.advance(DISCONNECT_GRACE_MS * 2);
+		expect(await phaseOf(gameId)).toBe('round');
+
+		// Gone for good this time: the round ends exactly when his grace runs out.
+		presence.pop()!();
+		const goneAt = fx.clock.now;
+		await fx.clock.advance(500);
+		const spare = await join(joinCode, 'Spare'); // a kick re-checks; Bob is still in his grace
+		await kickPlayer(gameId, spare.playerId);
+		expect(await phaseOf(gameId)).toBe('round');
+		await fx.clock.advance(goneAt + DISCONNECT_GRACE_MS - 1 - fx.clock.now);
+		expect(await phaseOf(gameId)).toBe('round');
+		await fx.clock.advance(1);
+		expect(await phaseOf(gameId)).toBe('reveal');
+		expect(roundEnds()).toEqual([expect.objectContaining({ reason: 'allLocked' })]);
+	});
+
 	it('nobody connected never ends a round early', async () => {
 		const { gameId, joinCode } = await newGame(1);
 		const a = await join(joinCode, 'Ghost', { connected: false });
