@@ -8,6 +8,7 @@ import {
 	verifySessionValue
 } from './crypto.ts';
 import { RateLimiter } from './rate-limit.ts';
+import { safeNext } from './redirect.ts';
 
 const SECRET = 'x'.repeat(64);
 
@@ -75,5 +76,43 @@ describe('RateLimiter', () => {
 		expect(rl.check('ip', 1).allowed).toBe(false);
 		rl.reset('ip');
 		expect(rl.check('ip', 1).allowed).toBe(true);
+	});
+});
+
+describe('safeNext', () => {
+	it('keeps same-site paths with query and hash', () => {
+		expect(safeNext('/host')).toBe('/host');
+		expect(safeNext('/admin/locations?q=paris&page=2#list')).toBe('/admin/locations?q=paris&page=2#list');
+		expect(safeNext('/host/abc?next=//evil.example')).toBe('/host/abc?next=//evil.example');
+		expect(safeNext('/a/../admin')).toBe('/admin');
+		expect(safeNext('/%2F/evil.example')).toBe('/%2F/evil.example'); // an encoded slash stays a path
+	});
+
+	it.each([
+		null,
+		undefined,
+		'',
+		'host',
+		'https://evil.example',
+		'javascript:alert(1)',
+		'//evil.example',
+		'///evil.example',
+		'/\\evil.example',
+		'\\\\evil.example',
+		'/\t/evil.example',
+		'/\n/evil.example',
+		'/\r/evil.example',
+		'/\t\t/evil.example',
+		'/\u0000/evil.example',
+		'/\u007f/evil.example',
+		'/\u0085/evil.example',
+		'/..//evil.example',
+		'/.//evil.example',
+		'/a/../..//evil.example',
+		' //evil.example',
+		'\t//evil.example'
+	])('refuses %j', (next) => {
+		expect(safeNext(next)).toBe('/host');
+		expect(safeNext(next, '/admin')).toBe('/admin');
 	});
 });

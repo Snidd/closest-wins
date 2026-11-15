@@ -14,6 +14,7 @@ import { constantTimeEqual, createSessionValue, verifySessionValue } from './cry
 
 export { mintToken, hashToken, isPlausibleToken, constantTimeEqual } from './crypto.ts';
 export { joinLimiter, loginLimiter, RateLimiter, tvRegisterLimiter } from './rate-limit.ts';
+export { safeNext } from './redirect.ts';
 
 export const ADMIN_COOKIE = 'cw_admin';
 export const TV_COOKIE = 'cw_tv';
@@ -65,14 +66,6 @@ export function requireAdmin(): void {
 /** For server `load` functions of protected pages: redirects to `/login?next=…`. */
 export function requireAdminPage(url: URL, locals: App.Locals): void {
 	if (!locals.admin) redirect(303, `/login?next=${encodeURIComponent(url.pathname + url.search)}`);
-}
-
-/** Only allow same-site relative redirects after login. */
-export function safeNext(next: string | null | undefined, fallback = '/host'): string {
-	if (!next || !next.startsWith('/') || next.startsWith('//') || next.startsWith('/\\')) {
-		return fallback;
-	}
-	return next;
 }
 
 // --- Players -----------------------------------------------------------------------------------
