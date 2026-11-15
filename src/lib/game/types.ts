@@ -116,8 +116,12 @@ export interface ActiveRound {
 	/** 1-based display number among regular rounds; for sudden death, 1-based SD round number. */
 	number: number;
 	isSuddenDeath: boolean;
-	/** Players allowed to guess. `null` means every player; in sudden death only the tied leaders. */
-	eligiblePlayerIds: string[] | null;
+	/**
+	 * Players allowed to guess this round (non-kicked, in join order): in a regular round
+	 * everyone who had joined when it started (a player joining mid-round watches it), in sudden
+	 * death only the tied leaders. "N of M locked in" counts these players only.
+	 */
+	eligiblePlayerIds: string[];
 	startedAt: EpochMs;
 	endsAt: EpochMs;
 	clue: ClueView;

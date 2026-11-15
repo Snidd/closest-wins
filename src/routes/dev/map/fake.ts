@@ -75,7 +75,7 @@ export function fakeResult(
 			index: 0,
 			number: 1,
 			isSuddenDeath: false,
-			eligiblePlayerIds: null,
+			eligiblePlayerIds: players.map((p) => p.id),
 			clue: { textSv: null, textEn: 'Fake clue', photo: null },
 			startedAt: serverNow - 60_000,
 			endedAt: serverNow

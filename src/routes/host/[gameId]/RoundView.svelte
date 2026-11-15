@@ -17,7 +17,7 @@
 	const c = useT(common);
 
 	const round = $derived(snap.round);
-	const eligibleIds = $derived(new Set(round.eligiblePlayerIds ?? snap.players.map((p) => p.id)));
+	const eligibleIds = $derived(new Set(round.eligiblePlayerIds));
 	const lockedIds = $derived(new Set(snap.lockedPlayerIds));
 	const eligible = $derived(snap.players.filter((p) => eligibleIds.has(p.id)));
 	const locked = $derived(eligible.filter((p) => lockedIds.has(p.id)));

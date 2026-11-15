@@ -171,13 +171,8 @@
 	}
 
 	// --- Others -----------------------------------------------------------------------------------
-	// Who may guess. `eligiblePlayerIds` is null in regular rounds; then everyone except players
-	// who joined mid-round, which the snapshot cannot tell apart (except this phone's own player).
-	const participants = $derived(
-		round.eligiblePlayerIds
-			? s.players.filter((p) => round.eligiblePlayerIds!.includes(p.id))
-			: s.players.filter((p) => canGuess || p.id !== me.id)
-	);
+	// Who may guess (players who joined mid-round and sudden-death spectators are not counted).
+	const participants = $derived(s.players.filter((p) => round.eligiblePlayerIds.includes(p.id)));
 	const lockedIds = $derived(new Set(s.lockedPlayerIds));
 	const lockedCount = $derived(participants.filter((p) => lockedIds.has(p.id)).length);
 	const opponents = $derived(participants.filter((p) => p.id !== me.id));
@@ -237,7 +232,7 @@
 						{t().spectating}
 					</p>
 					<p class="panel-body">
-						{#if isSuddenDeath && round.eligiblePlayerIds}
+						{#if isSuddenDeath}
 							{t().spectatingSuddenDeath(t().list(participants.map((p) => p.nickname)))}
 						{:else}
 							{t().spectatingLate}

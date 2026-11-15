@@ -119,7 +119,7 @@ async function buildResult(
 			index: round.index,
 			number: roundNumber(round, rounds),
 			isSuddenDeath: round.isSuddenDeath,
-			eligiblePlayerIds: round.eligiblePlayerIds ?? null,
+			eligiblePlayerIds: eligibleIds(round, players),
 			clue: clueMap.get(round.locationId) ?? { textSv: null, textEn: null, photo: null },
 			startedAt: round.startedAt?.getTime() ?? endedAt,
 			endedAt
@@ -189,7 +189,7 @@ async function loadModel(gameId: string): Promise<GameModel | null> {
 				index: current.index,
 				number: roundNumber(current, rounds),
 				isSuddenDeath: current.isSuddenDeath,
-				eligiblePlayerIds: current.eligiblePlayerIds ?? null,
+				eligiblePlayerIds: eligibleIds(current, players),
 				startedAt: current.startedAt.getTime(),
 				endsAt: current.endsAt.getTime(),
 				clue: clueMap.get(current.locationId) ?? { textSv: null, textEn: null, photo: null }

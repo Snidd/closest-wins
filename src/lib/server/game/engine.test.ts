@@ -470,6 +470,11 @@ describe('joining', () => {
 		if (pl.status !== 'playing' || pl.phase !== 'round') throw new Error('expected round');
 		expect(pl.canGuess).toBe(false);
 		expect(pl.players.find((p) => p.id === late.playerId)?.lateJoiner).toBe(true);
+		// Every role is told who is guessing this round: Mia, not the mid-round joiner.
+		expect(pl.round.eligiblePlayerIds).toEqual([a.playerId]);
+		const hostDuring = await buildHostSnapshot(gameId);
+		if (hostDuring.phase !== 'round') throw new Error('expected round');
+		expect(hostDuring.round.eligiblePlayerIds).toEqual([a.playerId]);
 		await expectGameError(place(late, 0, near(l0, 0)), 'NOT_ELIGIBLE');
 		// Mia alone decides the early finish; Late is not waited for.
 		await place(a, 0, near(l0, 1), { lock: true });
@@ -481,6 +486,8 @@ describe('joining', () => {
 		await nextRound(gameId);
 		const pl2 = await buildPlayerStateForGame(gameId, late.token);
 		expect(pl2.status === 'playing' && pl2.phase === 'round' && pl2.canGuess).toBe(true);
+		if (pl2.status !== 'playing' || pl2.phase !== 'round') throw new Error('expected round');
+		expect(pl2.round.eligiblePlayerIds).toEqual([a.playerId, late.playerId]);
 	});
 
 	it(`caps the game at ${MAX_PLAYERS} players and refuses joins after the game finished`, async () => {

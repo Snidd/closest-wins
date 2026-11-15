@@ -12,18 +12,21 @@
 	type Props = {
 		players: PlayerSummary[];
 		lockedIds: string[];
-		/** null = everyone plays. */
-		eligibleIds: string[] | null;
+		/** Players guessing this round; everyone else is listed as watching. */
+		eligibleIds: string[];
+		/** Sudden death: the few duellists get big chips. */
+		duel?: boolean;
 	};
-	let { players, lockedIds, eligibleIds }: Props = $props();
+	let { players, lockedIds, eligibleIds, duel = false }: Props = $props();
 	const t = useT(tvDict);
 
 	const locked = $derived(new Set(lockedIds));
-	const playing = $derived(eligibleIds ? players.filter((p) => eligibleIds.includes(p.id)) : players);
-	const watching = $derived(eligibleIds ? players.filter((p) => !eligibleIds.includes(p.id)) : []);
+	const eligible = $derived(new Set(eligibleIds));
+	const playing = $derived(players.filter((p) => eligible.has(p.id)));
+	const watching = $derived(players.filter((p) => !eligible.has(p.id)));
 	const lockedCount = $derived(playing.filter((p) => locked.has(p.id)).length);
 	const n = $derived(playing.length);
-	const tier = $derived(eligibleIds ? 'duel' : n <= 8 ? 'xl' : n <= 14 ? 'lg' : n <= 24 ? 'md' : 'sm');
+	const tier = $derived(duel ? 'duel' : n <= 8 ? 'xl' : n <= 14 ? 'lg' : n <= 24 ? 'md' : 'sm');
 </script>
 
 <div class="bar" data-testid="players-bar">
