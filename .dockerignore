@@ -1,0 +1,14 @@
+# Only what the image needs; never local data, secrets or build output.
+.git
+.svelte-kit
+build
+node_modules
+data
+test-results
+playwright-report
+shots
+.env
+.env.*
+!.env.example
+.claude
+*.log

@@ -47,9 +47,11 @@ import {
 import {
 	getPlayerToken,
 	getTvToken,
+	joinLimiter,
 	requireAdmin,
 	setPlayerToken,
-	setTvToken
+	setTvToken,
+	tvRegisterLimiter
 } from '#lib/server/auth/index.ts';
 import * as engine from '#lib/server/game/engine.ts';
 import { GameError, gameErrorStatus } from '#lib/server/game/engine.ts';
@@ -122,6 +124,11 @@ export const tvState = query.live((): AsyncGenerator<TvStateValue> => {
 export const joinGame = form(JoinGameSchema, async (data, issue) => {
 	const event = getRequestEvent();
 	const t = translate(common, event.locals.locale);
+	// Every attempt counts (a flood of nickname guesses or joins), not only failures.
+	const limitKey = `join:${event.getClientAddress()}`;
+	const limit = joinLimiter.check(limitKey);
+	if (!limit.allowed) invalid(t.tooManyAttempts(limit.retryAfterSeconds));
+	joinLimiter.fail(limitKey);
 	const found = await engine.findGameByCode(data.code);
 	if (!found) invalid(issue.code(t.gameNotFoundTitle));
 
@@ -177,7 +184,15 @@ export const lockIn = command(LockInSchema, async (input): Promise<void> => {
  */
 export const registerTv = command(async (): Promise<RegisterTvResult> => {
 	const event = getRequestEvent();
-	const r = await engine.registerTv(getTvToken(event.cookies));
+	const existing = getTvToken(event.cookies);
+	if (!existing || !(await engine.resolveTv(existing))) {
+		// Only new screens create rows; limit those per address.
+		const key = `tv:${event.getClientAddress()}`;
+		const limit = tvRegisterLimiter.check(key);
+		if (!limit.allowed) error(429, 'Too many new screens from this address; try again later');
+		tvRegisterLimiter.fail(key);
+	}
+	const r = await engine.registerTv(existing);
 	if (r.token) setTvToken(event.cookies, event.url, r.token);
 	return { tvId: r.tvId };
 });

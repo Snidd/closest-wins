@@ -1,0 +1,75 @@
+# Production stack: the app (Dockerfile) + Postgres 18, with named volumes for the database and
+# for DATA_DIR (photos and the world map file).
+#
+#   cp .env.production.example .env.production     # fill in the secrets and ORIGIN
+#   docker compose -f compose.prod.yaml --env-file .env.production up -d --build
+#   docker compose -f compose.prod.yaml --env-file .env.production run --rm tools       # the map
+#   docker compose -f compose.prod.yaml --env-file .env.production run --rm app node scripts/seed.ts
+#
+# Its own project name keeps it apart from the dev database (compose.yaml, project
+# "closest-wins"); override with -p or COMPOSE_PROJECT_NAME.
+name: closest-wins-prod
+
+services:
+  app:
+    build:
+      context: .
+      target: app
+    image: closest-wins:latest
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - '${APP_BIND:-0.0.0.0}:${APP_PORT:-3000}:3000'
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-closestwins}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-closestwins}
+      ORIGIN: ${ORIGIN:?set ORIGIN to the public URL, e.g. https://game.example.com}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD}
+      SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET (openssl rand -hex 32)}
+      MCP_TOKEN: ${MCP_TOKEN:?set MCP_TOKEN (openssl rand -hex 24)}
+      DATA_DIR: /data
+      # Photo uploads are up to 15 MB; adapter-node's default body limit is 512K.
+      BODY_SIZE_LIMIT: ${BODY_SIZE_LIMIT:-16M}
+      # Behind a reverse proxy: where the client address comes from (login/join rate limits).
+      ADDRESS_HEADER: ${ADDRESS_HEADER:-}
+      XFF_DEPTH: ${XFF_DEPTH:-1}
+      # Live streams end at once on SIGTERM; this only bounds slow ordinary requests.
+      SHUTDOWN_TIMEOUT: ${SHUTDOWN_TIMEOUT:-10}
+    volumes:
+      - data:/data
+    stop_grace_period: 15s
+
+  db:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-closestwins}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-closestwins}
+    volumes:
+      # Postgres 18 images keep their data in a versioned directory under /var/lib/postgresql.
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  # One-off jobs with the full source tree (not started by `up`). By default it downloads the
+  # world map into the data volume (scripts/fetch-map.sh; needs internet, result ~120 MB).
+  tools:
+    profiles: [tools]
+    build:
+      context: .
+      target: tools
+    image: closest-wins-tools:latest
+    environment:
+      DATA_DIR: /data
+      DATABASE_URL: postgres://${POSTGRES_USER:-closestwins}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-closestwins}
+    volumes:
+      - data:/data
+
+volumes:
+  pgdata:
+  data:

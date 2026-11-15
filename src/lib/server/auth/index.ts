@@ -13,7 +13,7 @@ import { ADMIN_PASSWORD, SESSION_SECRET } from '$app/env/private';
 import { constantTimeEqual, createSessionValue, verifySessionValue } from './crypto.ts';
 
 export { mintToken, hashToken, isPlausibleToken, constantTimeEqual } from './crypto.ts';
-export { loginLimiter, RateLimiter } from './rate-limit.ts';
+export { joinLimiter, loginLimiter, RateLimiter, tvRegisterLimiter } from './rate-limit.ts';
 
 export const ADMIN_COOKIE = 'cw_admin';
 export const TV_COOKIE = 'cw_tv';

@@ -46,11 +46,33 @@ export const handle: Handle = async ({ event, resolve }) => {
 	const surface = surfaceFor(event.route.id);
 	const viewport = viewportFor(surface);
 
-	return resolve(event, {
+	const response = await resolve(event, {
 		transformPageChunk: ({ html }) =>
 			html
 				.replace('%cw.lang%', event.locals.locale)
 				.replace('%cw.surface%', surface)
 				.replace('%cw.viewport%', viewport)
 	});
+	setSecurityHeaders(response.headers);
+	return response;
 };
+
+/**
+ * Headers for every response (pages, remote functions, /media, /map, /mcp). The page CSP
+ * (including `frame-ancestors 'none'`) comes from Kit's `csp` option in vite.config.ts.
+ */
+function setSecurityHeaders(headers: Headers) {
+	const set = (name: string, value: string) => {
+		// Some responses (e.g. redirects) have immutable headers.
+		try {
+			if (!headers.has(name)) headers.set(name, value);
+		} catch {
+			// ignore
+		}
+	};
+	set('X-Content-Type-Options', 'nosniff');
+	set('Referrer-Policy', 'strict-origin-when-cross-origin');
+	set('X-Frame-Options', 'DENY');
+	set('Cross-Origin-Opener-Policy', 'same-origin');
+	set('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
+}

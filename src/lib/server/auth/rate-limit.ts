@@ -39,3 +39,13 @@ export class RateLimiter {
 
 /** 10 failed admin logins per client address per 15 minutes. */
 export const loginLimiter = new RateLimiter(10, 15 * 60 * 1000);
+
+/**
+ * Join attempts per client address per minute. Generous on purpose: behind NAT a whole room of
+ * phones can share one address (and behind a reverse proxy, without ADDRESS_HEADER, every
+ * client has the proxy's address). This only stops scripted floods.
+ */
+export const joinLimiter = new RateLimiter(120, 60 * 1000);
+
+/** New TV registrations (each creates a row) per client address per 10 minutes. */
+export const tvRegisterLimiter = new RateLimiter(30, 10 * 60 * 1000);
