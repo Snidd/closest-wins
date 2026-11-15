@@ -31,8 +31,8 @@ export async function newPhone(browser: Browser, opts: PhoneOptions = {}) {
 export async function submitNickname(page: Page, code: string, nickname: string) {
 	const input = page.locator('#nickname');
 	await input.waitFor();
-	// The form is hydrated (Enter submits through the remote form, not a full page post).
-	await expect(page.locator('main.join')).toHaveAttribute('data-hydrated', 'true');
+	// Hydrated: Enter submits through the remote form, not a full page post.
+	await expect(page.locator('html')).toHaveAttribute('data-hydrated', 'true');
 	await input.fill(nickname);
 	await input.press('Enter');
 	await page.waitForURL(new RegExp(`/play/${code}$`), { timeout: 20_000 });

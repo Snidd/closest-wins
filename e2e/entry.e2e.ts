@@ -51,8 +51,7 @@ const codeInput = (page: Page) => page.getByTestId('join-code');
 
 /** Waits until Svelte has hydrated (event handlers attached). */
 async function hydrated(page: Page) {
-	await page.waitForFunction(() => document.querySelector('[data-testid="join-code"], #nickname') !== null);
-	await page.waitForLoadState('networkidle');
+	await expect(page.locator('html')).toHaveAttribute('data-hydrated', 'true');
 }
 
 // --- Landing ---------------------------------------------------------------------------------------
@@ -289,7 +288,7 @@ test.describe('login', () => {
 		test(`works in ${locale} and keeps ?next`, async ({ browser }) => {
 			const { context, page } = await newPhone(browser, locale);
 			await page.goto('/login?next=%2Fadmin');
-			await page.waitForLoadState('networkidle');
+			await hydrated(page);
 			const password = page.getByLabel(label, { exact: true });
 			await expect(password).toHaveAttribute('autocomplete', 'current-password');
 			await expect(password).toHaveAttribute('type', 'password');
@@ -309,7 +308,7 @@ test.describe('login', () => {
 
 	test('ignores off-site next and falls back to /host', async ({ page }) => {
 		await page.goto('/login?next=%2F%2Fevil.example');
-		await page.waitForLoadState('networkidle');
+		await hydrated(page);
 		await page.getByLabel('Admin password', { exact: true }).fill(process.env.ADMIN_PASSWORD!);
 		await page.getByRole('button', { name: 'Log in', exact: true }).click();
 		await expect(page).toHaveURL(/\/host$/);

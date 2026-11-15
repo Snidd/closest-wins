@@ -17,6 +17,12 @@
 	$effect.pre(() => {
 		applySurface(document, surfaceFor(page.route.id));
 	});
+
+	// The app is interactive from here on (before this, forms post without JavaScript). Tests
+	// wait for `html[data-hydrated]` instead of guessing with network idleness.
+	$effect(() => {
+		document.documentElement.dataset.hydrated = 'true';
+	});
 </script>
 
 <svelte:head>

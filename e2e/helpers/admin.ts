@@ -107,6 +107,7 @@ export function tokenHash(token: string): string {
 /** Logs in through `/login` (the page's password field) and lands on `next`. */
 export async function loginHost(page: Page, next = '/host') {
 	await page.goto(`/login?next=${encodeURIComponent(next)}`);
+	await expect(page.locator('html')).toHaveAttribute('data-hydrated', 'true');
 	await page.locator('#password').fill(adminPassword());
 	await page.locator('#password').press('Enter');
 	await page.waitForURL((u) => u.pathname === next);
