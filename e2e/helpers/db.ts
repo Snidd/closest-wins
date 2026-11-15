@@ -70,6 +70,21 @@ export async function playerIdByNickname(gameId: string, nickname: string): Prom
 	return p.id;
 }
 
+/**
+ * The state a host looking at the game right now would send with `startRound`, `endRoundNow`,
+ * `skipReveal` or `nextRound` (`ExpectedState`; the engine ignores a command whose expectation
+ * no longer holds).
+ */
+export async function expectedState(
+	gameId: string
+): Promise<{ phase: string; roundIndex: number | null }> {
+	const [g] = await db()<{ phase: string; current_round: number | null }[]>`
+		select phase, current_round from game where id = ${gameId}`;
+	if (!g) throw new Error(`No game ${gameId}`);
+	const between = g.phase === 'round' || g.phase === 'reveal' || g.phase === 'standings';
+	return { phase: g.phase, roundIndex: between ? g.current_round : null };
+}
+
 export async function currentRoundIndex(gameId: string): Promise<number> {
 	const [g] = await db()<{ current_round: number | null }[]>`select current_round from game where id = ${gameId}`;
 	if (g?.current_round == null) throw new Error('No current round');

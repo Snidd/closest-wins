@@ -9,7 +9,7 @@ import sharp from 'sharp';
 import { JOIN_CODE_ALPHABET } from '../../src/lib/game/types.ts';
 import { Admin, tokenHash } from './admin.ts';
 import { BASE_URL } from './env.ts';
-import { currentRoundIndex, db, deleteGames } from './db.ts';
+import { currentRoundIndex, db, deleteGames, expectedState } from './db.ts';
 import { Device } from './remote.ts';
 import { SimPlayer, SimTv } from './sim.ts';
 
@@ -132,10 +132,14 @@ export class Host {
 		return new Host(await Admin.login(BASE_URL));
 	}
 
-	startRound = (gameId: string) => this.admin.game('startRound', { gameId });
-	endRoundNow = (gameId: string) => this.admin.game('endRoundNow', { gameId });
-	skipReveal = (gameId: string) => this.admin.game('skipReveal', { gameId });
-	nextRound = (gameId: string) => this.admin.game('nextRound', { gameId });
+	/** A command that moves the game on, sent from the state the game is in now. */
+	private advance = async (name: string, gameId: string) =>
+		this.admin.game(name, { gameId, expected: await expectedState(gameId) });
+
+	startRound = (gameId: string) => this.advance('startRound', gameId);
+	endRoundNow = (gameId: string) => this.advance('endRoundNow', gameId);
+	skipReveal = (gameId: string) => this.advance('skipReveal', gameId);
+	nextRound = (gameId: string) => this.advance('nextRound', gameId);
 	endGame = (gameId: string) => this.admin.game('endGame', { gameId });
 	kickPlayer = (gameId: string, playerId: string) => this.admin.game('kickPlayer', { gameId, playerId });
 

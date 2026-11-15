@@ -4,11 +4,13 @@
   One primary action per phase lives in the dock at the bottom (thumb reach); destructive actions
   (kick, end game) are in the menu sheet, and "End round now" is hold-to-confirm.
 
-  Double taps: the engine has no guard against a repeated `nextRound`, so every action button
-  disables itself from the tap until the snapshot's phase signature changes (or the command
-  fails), and a freshly shown primary button ignores taps for a moment (ARM_MS) so the second
-  tap of a double tap cannot land on the next phase's button. A 409 (the state already moved on)
-  is resolved quietly by trusting the next snapshot; other failures show a retry.
+  Double taps: every command that moves the game on carries the state it was sent from
+  (`expectedStateOf(snap)`, reused by a retry), and the engine ignores it if the game has moved
+  on, so a second tab, device or retried request never advances twice. On top of that (UX), every
+  action button disables itself from the tap until the snapshot's phase signature changes (or the
+  command fails), and a freshly shown primary button ignores taps for a moment (ARM_MS) so the
+  second tap of a double tap cannot land on the next phase's button. A 409 (the state already
+  moved on) is resolved quietly by trusting the next snapshot; other failures show a retry.
 -->
 <script lang="ts">
 	import { onMount, untrack } from 'svelte';
@@ -23,7 +25,7 @@
 		skipReveal,
 		startRound
 	} from '#lib/remote/game.remote.ts';
-	import type { HostSnapshot } from '#lib/game/types.ts';
+	import { expectedStateOf, type ExpectedState, type HostSnapshot } from '#lib/game/types.ts';
 	import { clockOffset } from '#lib/game/clock.ts';
 	import { revealDoneAt } from '#lib/map/reveal.ts';
 	import { useLocale, useT } from '#lib/i18n/context.ts';
@@ -132,13 +134,22 @@
 		};
 	}
 
-	async function act(action: Action, run: () => Promise<void>, { needsArm = true } = {}) {
-		if (pending || (needsArm && !armed) || !snap) return;
+	/**
+	 * Runs a host command once. `expected` is the state the command is sent from; a retry reuses
+	 * it, so a request that did go through (lost response) cannot advance the game a second time.
+	 */
+	async function act(
+		action: Action,
+		run: (expected: ExpectedState) => Promise<void>,
+		{ needsArm = true } = {},
+		expected: ExpectedState | null = snap ? expectedStateOf(snap) : null
+	) {
+		if (pending || (needsArm && !armed) || !snap || !expected) return;
 		const at = sig;
 		pending = { action, sig: at };
 		failure = null;
 		try {
-			await run();
+			await run(expected);
 			setTimeout(() => {
 				if (pending?.action === action && pending.sig === at) {
 					pending = null;
@@ -147,15 +158,15 @@
 			}, SETTLE_MS);
 		} catch (e) {
 			if (pending?.action === action && pending.sig === at) pending = null;
-			failed(e, () => act(action, run, { needsArm: false }));
+			failed(e, () => act(action, run, { needsArm: false }, expected));
 		}
 	}
 	const busy = (action: Action) => pending?.action === action;
 
-	const onStart = () => act('start', () => startRound({ gameId }));
-	const onEndRound = () => act('endRound', () => endRoundNow({ gameId }), { needsArm: false });
-	const onSkip = () => act('skip', () => skipReveal({ gameId }));
-	const onNext = () => act('next', () => nextRound({ gameId }));
+	const onStart = () => act('start', (expected) => startRound({ gameId, expected }));
+	const onEndRound = () => act('endRound', (expected) => endRoundNow({ gameId, expected }), { needsArm: false });
+	const onSkip = () => act('skip', (expected) => skipReveal({ gameId, expected }));
+	const onNext = () => act('next', (expected) => nextRound({ gameId, expected }));
 	const onEndGame = () => act('endGame', () => endGame({ gameId }), { needsArm: false });
 
 	// Kicks are per player; a row stays busy until the player disappears from the snapshot.

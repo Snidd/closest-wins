@@ -7,28 +7,35 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 import { and, eq } from 'drizzle-orm';
 import { client, db } from '#lib/server/db/index.ts';
 import { game, gameRound, guess, player } from '#lib/server/db/schema.ts';
-import { MAX_PLAYERS, PAIRING_CODE_TTL_MS, REVEAL_SUSPENSE_MS, type HostSnapshot } from '#lib/game/types.ts';
+import {
+	expectedStateOf,
+	MAX_PLAYERS,
+	PAIRING_CODE_TTL_MS,
+	REVEAL_SUSPENSE_MS,
+	type ExpectedState,
+	type HostSnapshot
+} from '#lib/game/types.ts';
 import {
 	armedRoundTimers,
 	createGame,
 	endGame,
-	endRoundNow,
+	endRoundNow as engineEndRoundNow,
 	GameError,
 	initEngine,
 	isGameFull,
 	joinGame,
 	kickPlayer,
 	lockIn,
-	nextRound,
+	nextRound as engineNextRound,
 	onEngineEvent,
 	pairTv,
 	registerTv,
 	resetEngineMemory,
 	resolvePlayer,
 	resolveTv,
-	skipReveal,
+	skipReveal as engineSkipReveal,
 	startEngine,
-	startRound,
+	startRound as engineStartRound,
 	updateGuess,
 	DISCONNECT_GRACE_MS,
 	RETRY_BASE_MS,
@@ -104,6 +111,16 @@ async function place(
 	if (opts.lock) await lockIn(j.player, input);
 	else await updateGuess(j.player, input);
 }
+
+/** The state a host looking at the game right now would send with a command. */
+async function current(gameId: string): Promise<ExpectedState> {
+	return expectedStateOf(await buildHostSnapshot(gameId));
+}
+// Host commands as sent from the current state (most tests); races pass a stale one explicitly.
+const startRound = async (gameId: string) => engineStartRound(gameId, await current(gameId));
+const endRoundNow = async (gameId: string) => engineEndRoundNow(gameId, await current(gameId));
+const skipReveal = async (gameId: string) => engineSkipReveal(gameId, await current(gameId));
+const nextRound = async (gameId: string) => engineNextRound(gameId, await current(gameId));
 
 async function phaseOf(gameId: string) {
 	const [g] = await db.select().from(game).where(eq(game.id, gameId));
@@ -596,14 +613,67 @@ describe('concurrency', () => {
 		await join(joinCode, 'Racer');
 		await startRound(gameId);
 		fx.clock.now += TIMER_S * 1000 + ROUND_END_GRACE_MS; // timer is due
-		await Promise.all([endRoundNow(gameId), endRoundNow(gameId), fx.clock.advance(0), endRoundNow(gameId)]);
+		const seen = await current(gameId); // what the host tabs show: the running round
+		await Promise.all([
+			engineEndRoundNow(gameId, seen),
+			engineEndRoundNow(gameId, seen),
+			fx.clock.advance(0),
+			engineEndRoundNow(gameId, seen)
+		]);
 		expect(await phaseOf(gameId)).toBe('reveal');
 		expect(roundEnds()).toHaveLength(1);
-		// Parallel "next" calls serialise: reveal → standings → round 2, never skipping a check.
-		await Promise.all([nextRound(gameId), nextRound(gameId)]);
-		expect(await phaseOf(gameId)).toBe('round');
-		expect(events.filter((e) => e.type === 'roundStarted')).toHaveLength(2);
 		await expectGameError(startRound(gameId), 'WRONG_PHASE');
+	});
+});
+
+describe('duplicate host commands (two tabs, retried requests)', () => {
+	const phases = () => events.filter((e) => e.type === 'phase').map((e) => e.type === 'phase' && e.phase);
+
+	it('two concurrent nextRound calls from the reveal make exactly one transition', async () => {
+		const { gameId, joinCode } = await newGame(3);
+		await join(joinCode, 'Twice');
+		await startRound(gameId);
+		await endRoundNow(gameId);
+		const fromReveal = await current(gameId);
+		expect(fromReveal).toEqual({ phase: 'reveal', roundIndex: 0 });
+		events = [];
+		await Promise.all([engineNextRound(gameId, fromReveal), engineNextRound(gameId, fromReveal)]);
+		expect(await phaseOf(gameId)).toBe('standings'); // not skipped to round 2
+		expect(phases()).toEqual(['standings']);
+		// A late retry of the same request changes nothing either.
+		await engineNextRound(gameId, fromReveal);
+		expect(phases()).toEqual(['standings']);
+
+		const fromStandings = await current(gameId);
+		await Promise.all([engineNextRound(gameId, fromStandings), engineNextRound(gameId, fromStandings)]);
+		expect(phases()).toEqual(['standings', 'round']);
+		expect(events.filter((e) => e.type === 'roundStarted')).toHaveLength(1);
+		const host = await buildHostSnapshot(gameId);
+		expect(host.phase === 'round' && host.round.index).toBe(1);
+	});
+
+	it('stale start, end-round and skip commands do not touch a later state', async () => {
+		const { gameId, joinCode } = await newGame(3);
+		await join(joinCode, 'Stale');
+		const fromLobby = await current(gameId);
+		await engineStartRound(gameId, fromLobby);
+		await engineStartRound(gameId, fromLobby); // retried: no-op, no WRONG_PHASE
+		const inRound0 = await current(gameId);
+		await engineEndRoundNow(gameId, inRound0);
+		const inReveal0 = await current(gameId);
+		await nextRound(gameId);
+		await nextRound(gameId); // round 1 running
+		events = [];
+		await engineEndRoundNow(gameId, inRound0); // pressed during round 0, arrives in round 1
+		await engineSkipReveal(gameId, inReveal0);
+		expect(await phaseOf(gameId)).toBe('round');
+		expect(events).toEqual([]);
+		await endRoundNow(gameId);
+		await engineSkipReveal(gameId, inReveal0); // the skip from reveal 0 does not skip reveal 1
+		const host = await buildHostSnapshot(gameId);
+		expect(host.phase === 'reveal' && [host.result.round.index, host.result.skipped]).toEqual([1, false]);
+		// A command whose expectation holds but that makes no sense there is still refused.
+		await expectGameError(engineStartRound(gameId, await current(gameId)), 'WRONG_PHASE');
 	});
 });
 

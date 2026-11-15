@@ -237,25 +237,28 @@ export const pairTv = form(PairTvSchema, async (data, issue): Promise<{ paired: 
 	return { paired: true };
 });
 
-export const startRound = command(StartRoundSchema, async ({ gameId }): Promise<void> => {
+// The commands that move the game on carry the state the host saw (`expected`, see
+// `expectedStateOf`); if the game has moved on since, they succeed without doing anything.
+
+export const startRound = command(StartRoundSchema, async ({ gameId, expected }): Promise<void> => {
 	requireAdmin();
-	await run(() => engine.startRound(gameId));
+	await run(() => engine.startRound(gameId, expected));
 });
 
 /** Ends the running round now. A no-op if it already ended (e.g. the timer won the race). */
-export const endRoundNow = command(EndRoundNowSchema, async ({ gameId }): Promise<void> => {
+export const endRoundNow = command(EndRoundNowSchema, async ({ gameId, expected }): Promise<void> => {
 	requireAdmin();
-	await run(() => engine.endRoundNow(gameId));
+	await run(() => engine.endRoundNow(gameId, expected));
 });
 
-export const skipReveal = command(SkipRevealSchema, async ({ gameId }): Promise<void> => {
+export const skipReveal = command(SkipRevealSchema, async ({ gameId, expected }): Promise<void> => {
 	requireAdmin();
-	await run(() => engine.skipReveal(gameId));
+	await run(() => engine.skipReveal(gameId, expected));
 });
 
-export const nextRound = command(NextRoundSchema, async ({ gameId }): Promise<void> => {
+export const nextRound = command(NextRoundSchema, async ({ gameId, expected }): Promise<void> => {
 	requireAdmin();
-	await run(() => engine.nextRound(gameId));
+	await run(() => engine.nextRound(gameId, expected));
 });
 
 export const kickPlayer = command(KickPlayerSchema, async ({ gameId, playerId }): Promise<void> => {

@@ -5,7 +5,7 @@
  */
 import { Admin, expectRedirect } from './admin.ts';
 import { BASE_URL } from './env.ts';
-import { db, deleteGames, deleteTvs, loadLocation, SEED, type LocationRow } from './db.ts';
+import { db, deleteGames, deleteTvs, expectedState, loadLocation, SEED, type LocationRow } from './db.ts';
 import { SimPlayer } from './sim.ts';
 
 export interface CreateOptions {
@@ -142,10 +142,14 @@ export class GameDriver {
 		await p.command('game', lock ? 'lockIn' : 'updateGuess', input);
 	}
 
-	startRound = () => this.cmd('startRound');
-	endRoundNow = () => this.cmd('endRoundNow');
-	skipReveal = () => this.cmd('skipReveal');
-	nextRound = () => this.cmd('nextRound');
+	/** A command that moves the game on, sent from the state the game is in now. */
+	private advance = async (name: string) =>
+		this.cmd(name, { gameId: this.gameId, expected: await expectedState(this.gameId) });
+
+	startRound = () => this.advance('startRound');
+	endRoundNow = () => this.advance('endRoundNow');
+	skipReveal = () => this.advance('skipReveal');
+	nextRound = () => this.advance('nextRound');
 	endGame = () => this.cmd('endGame');
 
 	/** Removes everything this driver created. Safe to call more than once. */

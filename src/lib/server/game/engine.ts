@@ -14,6 +14,9 @@
  * - A round also ends early when every eligible, present, non-kicked player has locked in
  *   (checked after each lock-in, kick and disconnect). A player counts as present until they
  *   have been disconnected for `DISCONNECT_GRACE_MS`.
+ * - Host commands that move the game on (`startRound`, `endRoundNow`, `skipReveal`,
+ *   `nextRound`) carry the state the host saw (`ExpectedState`) and are no-ops if the game is no
+ *   longer in it, so duplicates (two host tabs, retries) never advance twice.
  * - Callers are authenticated by the remote functions before calling in here.
  * - Expected failures throw `GameError`; remote functions map them to HTTP errors.
  */
@@ -39,6 +42,7 @@ import {
 	PAIRING_CODE_TTL_MS,
 	type CreateGameInput,
 	type CreateGameResult,
+	type ExpectedState,
 	type JoinGameInput,
 	type JoinGameResult,
 	type LockInInput,
@@ -621,9 +625,20 @@ export async function pairTv(gameId: string, pairingCode: string): Promise<void>
 	});
 }
 
-/** `lobby` → `round` (first round). */
-export async function startRound(gameId: string): Promise<void> {
+/**
+ * Is the game still in the state the host saw (`expected`)? Host commands that move the game on
+ * are no-ops otherwise: another tab, device or a retried request got there first.
+ */
+function isExpected(g: Game, expected: ExpectedState): boolean {
+	if (g.phase !== expected.phase) return false;
+	if (g.phase === 'lobby' || g.phase === 'finished') return true;
+	return g.currentRound === expected.roundIndex;
+}
+
+/** `lobby` → `round` (first round). A no-op unless the game is in the `expected` state. */
+export async function startRound(gameId: string, expected: ExpectedState): Promise<void> {
 	await transition(gameId, async (tx, g, fx) => {
+		if (!isExpected(g, expected)) return;
 		if (g.phase !== 'lobby') throw new GameError('WRONG_PHASE', 'The game has already started');
 		const rounds = await loadRounds(tx, g.id);
 		const first = rounds.find((r) => !r.isSuddenDeath && r.startedAt === null);
@@ -632,9 +647,13 @@ export async function startRound(gameId: string): Promise<void> {
 	});
 }
 
-/** `round` → `reveal`, scoring the round now. A no-op if the round already ended (race). */
-export async function endRoundNow(gameId: string): Promise<void> {
+/**
+ * `round` → `reveal`, scoring the round now. A no-op unless the game is in the `expected` state
+ * (e.g. the round already ended by the timer, or a later round is running).
+ */
+export async function endRoundNow(gameId: string, expected: ExpectedState): Promise<void> {
 	await transition(gameId, async (tx, g, fx) => {
+		if (!isExpected(g, expected)) return;
 		if (g.phase === 'reveal') return;
 		if (g.phase !== 'round') throw new GameError('WRONG_PHASE', 'No round is running');
 		const round = await lockCurrentRound(tx, g);
@@ -643,9 +662,13 @@ export async function endRoundNow(gameId: string): Promise<void> {
 	});
 }
 
-/** In `reveal`: mark the choreography as skipped (`answerVisibleAt` becomes now). */
-export async function skipReveal(gameId: string): Promise<void> {
+/**
+ * In `reveal`: mark the choreography as skipped (`answerVisibleAt` becomes now). A no-op unless
+ * the game is in the `expected` state.
+ */
+export async function skipReveal(gameId: string, expected: ExpectedState): Promise<void> {
 	await transition(gameId, async (tx, g, fx) => {
+		if (!isExpected(g, expected)) return;
 		if (g.phase === 'standings') return;
 		if (g.phase !== 'reveal') throw new GameError('WRONG_PHASE', 'Nothing is being revealed');
 		if (g.revealSkippedAt) return;
@@ -654,9 +677,13 @@ export async function skipReveal(gameId: string): Promise<void> {
 	});
 }
 
-/** `reveal` → `standings`; `standings` → next round, sudden-death round, or `finished`. */
-export async function nextRound(gameId: string): Promise<void> {
+/**
+ * `reveal` → `standings`; `standings` → next round, sudden-death round, or `finished`. A no-op
+ * unless the game is in the `expected` state, so a duplicate never advances twice.
+ */
+export async function nextRound(gameId: string, expected: ExpectedState): Promise<void> {
 	await transition(gameId, async (tx, g, fx) => {
+		if (!isExpected(g, expected)) return;
 		if (g.phase === 'reveal') {
 			await tx.update(game).set({ phase: 'standings' }).where(eq(game.id, g.id));
 			fx.notify.add(g.id);

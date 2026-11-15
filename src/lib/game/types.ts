@@ -490,12 +490,41 @@ export const PairTvSchema = v.object({
 	pairingCode: v.pipe(v.string(), v.trim(), v.regex(/^[0-9]{6}$/, 'Enter the 6-digit code'))
 });
 
-/** `startRound`, `endRoundNow`, `skipReveal`, `nextRound`, `endGame` (admin). */
+/**
+ * The state the host was looking at when it sent a command that moves the game on. The engine
+ * acts only if the game is still in exactly this state and otherwise ignores the command (a
+ * successful no-op), so a second host tab or device, or a retried request, can never advance
+ * twice (e.g. skip the standings, or end the next round). Build it with `expectedStateOf`.
+ */
+export const ExpectedStateSchema = v.object({
+	phase: v.picklist(GAME_PHASES),
+	/** The round on screen: `round.index` in `round`, `result.round.index` in `reveal` /
+	 *  `standings`; null in `lobby` / `finished` (not compared there). */
+	roundIndex: v.nullable(v.pipe(v.number(), v.integer(), v.minValue(0)))
+});
+export type ExpectedState = v.InferOutput<typeof ExpectedStateSchema>;
+
+/** The `ExpectedState` of a snapshot (what a command sent from it expects). */
+export function expectedStateOf(s: PhaseState): ExpectedState {
+	switch (s.phase) {
+		case 'round':
+			return { phase: s.phase, roundIndex: s.round.index };
+		case 'reveal':
+		case 'standings':
+			return { phase: s.phase, roundIndex: s.result.round.index };
+		default:
+			return { phase: s.phase, roundIndex: null };
+	}
+}
+
+/** `endGame` (admin): any phase → `finished`, idempotent. */
 export const GameIdSchema = v.object({ gameId: UuidSchema });
-export const StartRoundSchema = GameIdSchema;
-export const EndRoundNowSchema = GameIdSchema;
-export const SkipRevealSchema = GameIdSchema;
-export const NextRoundSchema = GameIdSchema;
+/** `startRound`, `endRoundNow`, `skipReveal`, `nextRound` (admin): carry the state they expect. */
+export const AdvanceGameSchema = v.object({ gameId: UuidSchema, expected: ExpectedStateSchema });
+export const StartRoundSchema = AdvanceGameSchema;
+export const EndRoundNowSchema = AdvanceGameSchema;
+export const SkipRevealSchema = AdvanceGameSchema;
+export const NextRoundSchema = AdvanceGameSchema;
 export const EndGameSchema = GameIdSchema;
 
 /** `kickPlayer` (admin). */
@@ -507,6 +536,7 @@ export type LockInInput = v.InferOutput<typeof LockInSchema>;
 export type CreateGameInput = v.InferOutput<typeof CreateGameSchema>;
 export type PairTvInput = v.InferOutput<typeof PairTvSchema>;
 export type GameIdInput = v.InferOutput<typeof GameIdSchema>;
+export type AdvanceGameInput = v.InferOutput<typeof AdvanceGameSchema>;
 export type KickPlayerInput = v.InferOutput<typeof KickPlayerSchema>;
 
 // ---------------------------------------------------------------------------------------------

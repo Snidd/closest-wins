@@ -5,10 +5,11 @@
  *
  * Every test creates its own game (and TV/players) and removes exactly those afterwards.
  */
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page, type Route } from '@playwright/test';
 import { createGameViaUi, loginHost } from './helpers/admin.ts';
 import { closeDb, dbGame, LANDMARKS } from './helpers/db.ts';
 import { Created } from './helpers/fixtures.ts';
+import { remoteId } from './helpers/remote.ts';
 
 test.use({ locale: 'en-US', viewport: { width: 390, height: 844 } });
 
@@ -252,6 +253,45 @@ test.describe('running a game', () => {
 		await page.waitForTimeout(1500);
 		expect(await dbGame(gameId)).toMatchObject({ phase: 'standings', started: 2 });
 		await expect(primary(page)).toHaveText('Start round 3');
+	});
+
+	test('two host devices pressing next at the same moment advance exactly once', async ({ page, context }) => {
+		await loginHost(page);
+		const { code, gameId } = await createGame(page, created, { rounds: 3, seconds: 120 });
+		const [alice] = await created.join(code, 'Alice');
+		await startRound(page);
+		await alice!.lockIn(10, 10);
+		await expect(page.getByTestId('reveal-place')).toBeVisible();
+		// A second device of the same host (same session) on the same game.
+		const other = await context.newPage();
+		await other.goto(page.url());
+		await expect(other.locator('html[data-hydrated="true"]')).toBeAttached();
+		await expect(other.getByTestId('reveal-place')).toBeVisible();
+		await expect(primary(page)).toBeEnabled();
+		await expect(primary(other)).toBeEnabled();
+		await page.waitForTimeout(800); // past ARM_MS on both
+
+		// Both "Show standings" requests are in flight before either reaches the server.
+		const held: Route[] = [];
+		let bothHeld!: () => void;
+		const ready = new Promise<void>((resolve) => (bothHeld = resolve));
+		const hold = async (route: Route) => {
+			held.push(route);
+			if (held.length === 2) bothHeld();
+		};
+		const url = `**/_app/remote/${remoteId('game', 'nextRound')}`;
+		await page.route(url, hold);
+		await other.route(url, hold);
+		await Promise.all([primary(page).click(), primary(other).click()]);
+		await ready;
+		await Promise.all(held.map((r) => r.continue()));
+
+		await expect(title(page)).toHaveText('Standings');
+		await expect(title(other)).toHaveText('Standings');
+		await page.waitForTimeout(1500);
+		expect(await dbGame(gameId)).toMatchObject({ phase: 'standings', started: 1 });
+		await expect(primary(page)).toHaveText('Start round 2');
+		await other.close();
 	});
 
 	test('a tie at the end offers sudden death between the tied players', async ({ page }) => {

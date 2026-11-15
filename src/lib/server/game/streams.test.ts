@@ -115,7 +115,7 @@ describe('playerStream', () => {
 		await until(it, (v) => v.status === 'playing' && v.players.find((p) => p.id === a.playerId)!.connected);
 
 		const pending = nextValue(it);
-		await startRound(gameId);
+		await startRound(gameId, { phase: 'lobby', roundIndex: null });
 		const r = await pending;
 		expect(!r.done && r.value.status === 'playing' && r.value.phase).toBe('round');
 
