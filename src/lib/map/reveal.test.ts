@@ -3,6 +3,7 @@ import type { RevealGuess } from '#lib/game/types.ts';
 import { labelBox, placeLabels } from './labels.ts';
 import {
 	answerBounds,
+	answerShownAt,
 	framedGuesses,
 	guessesBounds,
 	REVEAL_FLY_MS,
@@ -27,6 +28,15 @@ describe('revealTimingAt', () => {
 	it('reports when the stage ends (for a reloaded screen resuming a flight)', () => {
 		const tm = revealTimingAt(timing, T0 + 4000);
 		expect(tm.endsAt - (T0 + 4000)).toBe(REVEAL_FLY_MS - 1000);
+	});
+	it('phones show the answer exactly when the TV shows the place name', () => {
+		const shownOnTv = (now: number) => ['lines', 'done'].includes(revealTimingAt(timing, now).stage);
+		expect(shownOnTv(answerShownAt(timing) - 1)).toBe(false);
+		expect(shownOnTv(answerShownAt(timing))).toBe(true);
+		// Not at answerVisibleAt: the TV is still flying there ("And the answer is…").
+		expect(answerShownAt(timing)).toBe(timing.answerVisibleAt + REVEAL_FLY_MS);
+		const skipped = { ...timing, skipped: true, answerVisibleAt: T0 + 500 };
+		expect(answerShownAt(skipped)).toBe(T0 + 500);
 	});
 	it('jumps to done when skipped', () => {
 		const skipped = { ...timing, skipped: true, answerVisibleAt: T0 };

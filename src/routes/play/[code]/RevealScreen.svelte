@@ -1,11 +1,12 @@
 <!--
-  Reveal. Until `answerVisibleAt` (server clock) the phone only says "look at the TV", so it
-  never spoils the big screen's suspense; then the player's own outcome, the answer and a small
+  Reveal. Until the TV shows the answer (`answerShownAt`, server clock) the phone only says
+  "look at the TV", so it never spoils the big screen's suspense; then the player's own outcome, the answer and a small
   map of everyone's guesses for those who cannot see the TV.
 -->
 <script lang="ts">
 	import { useT } from '#lib/i18n/context.ts';
 	import { player } from '#lib/i18n/player.ts';
+	import { answerShownAt } from '#lib/map/reveal.ts';
 	import { ticker, type ServerClock } from './play.svelte.ts';
 	import Shell from './Shell.svelte';
 	import RoundOutcome from './RoundOutcome.svelte';
@@ -16,7 +17,8 @@
 	const t = useT(player);
 
 	const now = ticker(200);
-	const visible = $derived(now() + clock.offset >= s.result.answerVisibleAt);
+	// Same moment the TV shows the place name (not earlier: that would spoil its suspense).
+	const visible = $derived(now() + clock.offset >= answerShownAt(s.result));
 
 	const r = $derived(s.result.round);
 	const roundLabel = $derived(

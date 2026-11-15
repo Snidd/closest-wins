@@ -10,6 +10,22 @@
 
 type Listener = () => void;
 
+/** Aborted when the process starts shutting down: every live stream ends (see `endAllStreams`). */
+const shutdown = new AbortController();
+
+/**
+ * Ends every open live stream (server shutdown). Clients see their stream end and reconnect to
+ * the next process; without this, open event streams keep the HTTP server from closing until
+ * adapter-node's SHUTDOWN_TIMEOUT.
+ */
+export function endAllStreams(): void {
+	shutdown.abort();
+}
+
+export function isShuttingDown(): boolean {
+	return shutdown.signal.aborted;
+}
+
 const listeners = new Map<string, Set<Listener>>();
 const versions = new Map<string, number>();
 
@@ -64,8 +80,9 @@ export function totalSubscriberCount(): number {
  */
 export async function* watchChannels(
 	getKeys: () => readonly string[],
-	signal?: AbortSignal
+	requestSignal?: AbortSignal
 ): AsyncGenerator<void> {
+	const signal = requestSignal ? AbortSignal.any([requestSignal, shutdown.signal]) : shutdown.signal;
 	let dirty = true;
 	let wake: (() => void) | null = null;
 	const subs = new Map<string, () => void>();

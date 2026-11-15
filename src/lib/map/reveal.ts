@@ -34,6 +34,15 @@ export interface RevealTiming {
 
 type TimingInput = Pick<RoundResult, 'revealStartedAt' | 'answerVisibleAt' | 'skipped'>;
 
+/**
+ * Server time at which the TV shows the answer (the place name appears when the camera has
+ * landed, at the start of `lines`; at once when skipped). Phones must not show the answer or
+ * the player's own result before this, or they would spoil the big screen's suspense.
+ */
+export function answerShownAt(r: TimingInput): number {
+	return r.skipped ? r.answerVisibleAt : r.answerVisibleAt + REVEAL_FLY_MS;
+}
+
 /** Server time at which the reveal reaches `done` (name and fact can be shown). */
 export function revealDoneAt(r: TimingInput): number {
 	return r.skipped ? r.revealStartedAt : r.answerVisibleAt + REVEAL_FLY_MS + REVEAL_LINES_MS;

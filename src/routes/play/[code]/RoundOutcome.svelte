@@ -1,7 +1,7 @@
 <!--
   The player's own outcome of the revealed round, the answer (name + fact in the phone's
   language) and, in full mode, a small final-state map with the player's pin highlighted.
-  Only render this once the answer may be shown (`answerVisibleAt`).
+  Only render this once the answer may be shown (`answerShownAt`).
 -->
 <script lang="ts">
 	import RevealMap from '#lib/map/RevealMap.svelte';

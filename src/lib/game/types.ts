@@ -196,7 +196,11 @@ export interface RoundResult {
 	/** Closest player(s); several on an exact tie, empty if nobody guessed. */
 	winnerPlayerIds: string[];
 	revealStartedAt: EpochMs;
-	/** When phones may show the answer: after the TV's suspense beat, or immediately if skipped. */
+	/**
+	 * End of the TV's suspense beat (all pins shown, no answer yet), or the skip time. The TV then
+	 * flies to the answer and shows its name `REVEAL_FLY_MS` later: phones show the answer and
+	 * their own result from `answerShownAt(result)` (`#lib/map/reveal.ts`), never earlier.
+	 */
 	answerVisibleAt: EpochMs;
 	/** The host skipped the TV choreography. */
 	skipped: boolean;
@@ -298,7 +302,7 @@ export interface OwnGuess {
 	lockedAt: EpochMs | null;
 }
 
-/** The player's own outcome; show it once `serverNow + offset >= result.answerVisibleAt`. */
+/** The player's own outcome; show it once `serverNow + offset >= answerShownAt(result)`. */
 export interface OwnResult {
 	distanceKm: number | null;
 	rank: number | null;

@@ -1,14 +1,6 @@
 /** Map component strings (GuessMap, RevealMap, StaticPointMap). Owned by the map agent. */
 import { defineDict } from './dict.ts';
-
-function formatKm(km: number, locale: string): string {
-	const digits = km < 10 ? 1 : 0;
-	const n = new Intl.NumberFormat(locale, {
-		minimumFractionDigits: digits,
-		maximumFractionDigits: digits
-	}).format(km);
-	return `${n} km`;
-}
+import { formatDistance as formatKm } from './format.ts';
 
 export const map = defineDict({
 	en: {

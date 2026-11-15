@@ -1,19 +1,6 @@
 /** Player phone strings. Owned by the player-surface agent; extend freely (keep sv/en in sync). */
 import { defineDict } from './dict.ts';
-
-/** Locale-aware distance: metres below 1 km, one decimal below 10 km, whole km above. */
-function formatDistance(km: number, locale: string): string {
-	if (km < 1) {
-		const m = Math.max(10, Math.round((km * 1000) / 10) * 10);
-		return `${new Intl.NumberFormat(locale).format(m)} m`;
-	}
-	const digits = km < 10 ? 1 : 0;
-	const n = new Intl.NumberFormat(locale, {
-		minimumFractionDigits: digits,
-		maximumFractionDigits: digits
-	}).format(km);
-	return `${n} km`;
-}
+import { formatDistance } from './format.ts';
 
 const enOrdinal = (n: number) => {
 	const s = n % 100 >= 11 && n % 100 <= 13 ? 'th' : (['th', 'st', 'nd', 'rd'][n % 10] ?? 'th');

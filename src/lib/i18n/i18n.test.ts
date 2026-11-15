@@ -6,6 +6,7 @@ import { player } from './player.ts';
 import { host } from './host.ts';
 import { tv } from './tv.ts';
 import { admin } from './admin.ts';
+import { map } from './map.ts';
 
 describe('detectLocale', () => {
 	it.each([
@@ -62,5 +63,17 @@ describe('dictionaries', () => {
 		expect(common.en.roundOf(2, 10)).toBe('Round 2 of 10');
 		expect(common.sv.roundOf(2, 10)).toBe('Runda 2 av 10');
 		expect(common.sv.km(3.25)).toBe('3,3 km');
+	});
+
+	it('formats distances the same way on every surface', () => {
+		for (const km of [0.004, 0.42, 3.25, 12.6, 1234.4]) {
+			expect(common.en.km(km)).toBe(player.en.distance(km));
+			expect(common.sv.km(km)).toBe(player.sv.distance(km));
+			expect(common.en.km(km)).toBe(map.en.km(km));
+			expect(common.sv.km(km)).toBe(map.sv.km(km));
+		}
+		expect(common.en.km(0.42)).toBe('420 m');
+		expect(common.en.km(1234.4)).toBe('1,234 km');
+		expect(common.sv.km(1234.4)).toBe('1\u00a0234 km');
 	});
 });

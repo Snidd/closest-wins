@@ -6,6 +6,7 @@
  * engine's `joinGame` form issues: `translate(common, event.locals.locale).nicknameTaken`.
  */
 import { defineDict } from './dict.ts';
+import { formatDistance } from './format.ts';
 
 export const common = defineDict({
 	en: {
@@ -85,8 +86,7 @@ export const common = defineDict({
 		roundsWon: 'Rounds won',
 		totalDistance: 'Total distance',
 		distance: 'Distance',
-		km: (km: number) =>
-			`${km < 10 ? km.toFixed(1) : Math.round(km).toLocaleString('en')} km`,
+		km: (km: number) => formatDistance(km, 'en-GB'),
 		secondsShort: (s: number) => `${s} s`,
 		timeLeft: 'Time left',
 		lockedIn: 'Locked in',
@@ -172,7 +172,7 @@ export const common = defineDict({
 		roundsWon: 'Vunna rundor',
 		totalDistance: 'Total distans',
 		distance: 'Avstånd',
-		km: (km) => `${km < 10 ? km.toFixed(1).replace('.', ',') : Math.round(km).toLocaleString('sv')} km`,
+		km: (km) => formatDistance(km, 'sv-SE'),
 		secondsShort: (s) => `${s} s`,
 		timeLeft: 'Tid kvar',
 		lockedIn: 'Låst',
