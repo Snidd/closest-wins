@@ -15,25 +15,6 @@
 	let { data }: PageProps = $props();
 	const t = useT(player);
 	const tc = useT(common);
-
-	// `<html data-surface>` and the locked viewport are only set when the server renders a page.
-	// Players usually arrive here by a client-side navigation (the join form redirects), so apply
-	// the play surface (no page scroll / zoom / bounce) ourselves and restore it when leaving.
-	$effect(() => {
-		const html = document.documentElement;
-		const meta = document.querySelector<HTMLMetaElement>('meta[name="viewport"]');
-		const prevSurface = html.dataset.surface;
-		const prevViewport = meta?.content;
-		html.dataset.surface = 'play';
-		if (meta && !/user-scalable=no/.test(meta.content)) {
-			meta.content = `${meta.content}, maximum-scale=1, user-scalable=no`;
-		}
-		return () => {
-			if (prevSurface === undefined) delete html.dataset.surface;
-			else html.dataset.surface = prevSurface;
-			if (meta && prevViewport !== undefined) meta.content = prevViewport;
-		};
-	});
 </script>
 
 <svelte:head>
