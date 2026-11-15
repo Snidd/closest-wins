@@ -1,0 +1,363 @@
+/*
+ * Global design tokens and base styles. Plain CSS, imported once by src/routes/+layout.svelte.
+ * Components use the custom properties below; do not hard-code colours or sizes.
+ *
+ * Surfaces: hooks.server.ts sets <html data-surface="tv|play|host|admin|default">.
+ * - tv:   the whole type scale grows with the viewport so text reads from across a room.
+ * - play: page zoom/overscroll/scroll are locked so the map owns every gesture.
+ */
+
+:root {
+	color-scheme: light dark;
+
+	/* Brand / semantic colours (light) */
+	--color-bg: #f4f7fb;
+	--color-surface: #ffffff;
+	--color-surface-2: #e9eef5;
+	--color-text: #0f1b2a;
+	--color-text-muted: #55657a;
+	--color-border: #cfd8e3;
+	--color-primary: #0b6bcb;
+	--color-primary-hover: #0958a8;
+	--color-primary-contrast: #ffffff;
+	--color-accent: #f2a900;
+	--color-accent-contrast: #1d1400;
+	--color-success: #1d8a4e;
+	--color-warning: #b86e00;
+	--color-danger: #c62f3b;
+	--color-danger-contrast: #ffffff;
+	--color-focus: #ffb703;
+	--color-overlay: rgb(10 20 35 / 0.55);
+	/* Map hints (the MapLibre style defines its own palette; these are for UI around the map). */
+	--color-ocean: #a9cbe6;
+	--color-land: #e8e1cf;
+	--color-cross: #0f1b2a;
+	--color-cross-outline: #ffffff;
+
+	/* Spacing (4px grid at the default root size) */
+	--space-0: 0;
+	--space-1: 0.25rem;
+	--space-2: 0.5rem;
+	--space-3: 0.75rem;
+	--space-4: 1rem;
+	--space-5: 1.5rem;
+	--space-6: 2rem;
+	--space-7: 3rem;
+	--space-8: 4rem;
+
+	/* Type */
+	--font-sans:
+		system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif,
+		'Apple Color Emoji', 'Segoe UI Emoji';
+	--font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+	--text-xs: 0.75rem;
+	--text-sm: 0.875rem;
+	--text-md: 1rem;
+	--text-lg: 1.125rem;
+	--text-xl: 1.375rem;
+	--text-2xl: 1.75rem;
+	--text-3xl: 2.25rem;
+	--text-4xl: 3rem;
+	--text-5xl: 4.5rem;
+	--leading-tight: 1.15;
+	--leading-normal: 1.45;
+	--weight-normal: 400;
+	--weight-medium: 550;
+	--weight-bold: 700;
+
+	/* Shape & depth */
+	--radius-sm: 0.375rem;
+	--radius-md: 0.625rem;
+	--radius-lg: 1rem;
+	--radius-pill: 999px;
+	--shadow-sm: 0 1px 2px rgb(15 27 42 / 0.12);
+	--shadow-md: 0 4px 14px rgb(15 27 42 / 0.16);
+	--shadow-lg: 0 12px 32px rgb(15 27 42 / 0.22);
+
+	/* Motion */
+	--duration-fast: 120ms;
+	--duration-normal: 220ms;
+	--duration-slow: 600ms;
+	--ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+	/* Layout */
+	--tap-target: 3rem;
+	--content-max: 40rem;
+	--safe-top: env(safe-area-inset-top, 0px);
+	--safe-right: env(safe-area-inset-right, 0px);
+	--safe-bottom: env(safe-area-inset-bottom, 0px);
+	--safe-left: env(safe-area-inset-left, 0px);
+
+	/* Player pin colours: keep in sync with PLAYER_COLORS in src/lib/ui/colors.ts */
+	--player-0: #e6424a;
+	--player-1: #2debf9;
+	--player-2: #0867a9;
+	--player-3: #519c03;
+	--player-4: #d689f7;
+	--player-5: #f5cc58;
+	--player-6: #8c5500;
+	--player-7: #993683;
+	--player-8: #febccf;
+	--player-9: #ff8950;
+	--player-10: #5978fd;
+	--player-11: #61b4ff;
+	--player-12: #0498a2;
+	--player-13: #22cd82;
+	--player-14: #0a7648;
+	--player-15: #b257d7;
+	--player-16: #b0b70a;
+	--player-17: #a38207;
+	--player-18: #fd7eaa;
+	--player-19: #694bb5;
+	--player-20: #ac3036;
+	--player-21: #a9e686;
+	--player-22: #add6fd;
+	--player-23: #16c5d0;
+	--player-24: #656903;
+	--player-25: #007178;
+	--player-26: #008be3;
+	--player-27: #cd4ab0;
+	--player-28: #de4181;
+	--player-29: #8d66f1;
+	--player-30: #d75a07;
+	--player-31: #079f62;
+	--player-32: #eabdfe;
+	--player-33: #b19cfe;
+	--player-34: #7cc54d;
+	--player-35: #f07fd4;
+	--player-36: #f19601;
+	--player-37: #d3a813;
+	--player-38: #4158bd;
+	--player-39: #a62f5f;
+}
+
+/* Dark theme: follows the OS unless data-theme forces one. */
+@media (prefers-color-scheme: dark) {
+	:root:not([data-theme='light']) {
+		--color-bg: #0b1622;
+		--color-surface: #132233;
+		--color-surface-2: #1b2e43;
+		--color-text: #e8eef6;
+		--color-text-muted: #9aabbf;
+		--color-border: #2a4058;
+		--color-primary: #4ea3ff;
+		--color-primary-hover: #73b6ff;
+		--color-primary-contrast: #04111f;
+		--color-accent: #ffc23d;
+		--color-success: #3ccf7f;
+		--color-warning: #ffaa33;
+		--color-danger: #ff6670;
+		--color-danger-contrast: #1f0306;
+		--color-overlay: rgb(0 0 0 / 0.6);
+		--color-ocean: #12304a;
+		--color-land: #2c3a2f;
+		--shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
+		--shadow-md: 0 4px 14px rgb(0 0 0 / 0.45);
+		--shadow-lg: 0 12px 32px rgb(0 0 0 / 0.55);
+	}
+}
+
+:root[data-theme='dark'] {
+	--color-bg: #0b1622;
+	--color-surface: #132233;
+	--color-surface-2: #1b2e43;
+	--color-text: #e8eef6;
+	--color-text-muted: #9aabbf;
+	--color-border: #2a4058;
+	--color-primary: #4ea3ff;
+	--color-primary-hover: #73b6ff;
+	--color-primary-contrast: #04111f;
+	--color-accent: #ffc23d;
+	--color-success: #3ccf7f;
+	--color-warning: #ffaa33;
+	--color-danger: #ff6670;
+	--color-danger-contrast: #1f0306;
+	--color-overlay: rgb(0 0 0 / 0.6);
+	--color-ocean: #12304a;
+	--color-land: #2c3a2f;
+	--shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
+	--shadow-md: 0 4px 14px rgb(0 0 0 / 0.45);
+	--shadow-lg: 0 12px 32px rgb(0 0 0 / 0.55);
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * Base
+ * ------------------------------------------------------------------------------------------- */
+
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
+
+html {
+	-webkit-text-size-adjust: 100%;
+	text-size-adjust: 100%;
+	-webkit-tap-highlight-color: transparent;
+}
+
+body {
+	margin: 0;
+	min-height: 100dvh;
+	background: var(--color-bg);
+	color: var(--color-text);
+	font-family: var(--font-sans);
+	font-size: var(--text-md);
+	line-height: var(--leading-normal);
+	-webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+h4 {
+	margin: 0;
+	line-height: var(--leading-tight);
+	font-weight: var(--weight-bold);
+}
+h1 {
+	font-size: var(--text-3xl);
+}
+h2 {
+	font-size: var(--text-2xl);
+}
+h3 {
+	font-size: var(--text-xl);
+}
+
+p {
+	margin: 0;
+}
+
+a {
+	color: var(--color-primary);
+}
+
+img,
+svg,
+canvas {
+	display: block;
+	max-width: 100%;
+}
+
+button,
+input,
+select,
+textarea {
+	font: inherit;
+	color: inherit;
+}
+
+:focus-visible {
+	outline: 3px solid var(--color-focus);
+	outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+		scroll-behavior: auto !important;
+	}
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * Layout helpers
+ * ------------------------------------------------------------------------------------------- */
+
+/** Standard page: mobile first, padded inside the safe area. */
+.page {
+	min-height: 100dvh;
+	padding: calc(var(--space-4) + var(--safe-top)) calc(var(--space-4) + var(--safe-right))
+		calc(var(--space-4) + var(--safe-bottom)) calc(var(--space-4) + var(--safe-left));
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-4);
+}
+
+.page--narrow {
+	max-width: var(--content-max);
+	margin-inline: auto;
+	width: 100%;
+}
+
+.stack {
+	display: flex;
+	flex-direction: column;
+	gap: var(--stack-gap, var(--space-3));
+}
+
+.row {
+	display: flex;
+	align-items: center;
+	gap: var(--row-gap, var(--space-3));
+	flex-wrap: wrap;
+}
+
+.muted {
+	color: var(--color-text-muted);
+}
+
+.visually-hidden {
+	position: absolute !important;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect(0 0 0 0);
+	white-space: nowrap;
+	border: 0;
+}
+
+.code {
+	font-family: var(--font-mono);
+	letter-spacing: 0.12em;
+	font-weight: var(--weight-bold);
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * Surfaces
+ * ------------------------------------------------------------------------------------------- */
+
+/* Phones on the map: the map handles pan/pinch; the page must not zoom, scroll or bounce. */
+html[data-surface='play'],
+html[data-surface='play'] body {
+	height: 100dvh;
+	overflow: hidden;
+	overscroll-behavior: none;
+	touch-action: none;
+}
+html[data-surface='play'] body {
+	position: fixed;
+	inset: 0;
+	-webkit-user-select: none;
+	user-select: none;
+	-webkit-touch-callout: none;
+}
+/* Scrollable panels inside the play surface (e.g. the clue) opt back in. */
+html[data-surface='play'] .scrollable {
+	touch-action: pan-y;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+	-webkit-user-select: text;
+	user-select: text;
+}
+
+/*
+ * TV: every rem scales with the viewport, so the whole UI (built in rem) grows on a big screen.
+ * ~18px at 1280x720, ~27px at 1920x1080, capped at 56px (4K).
+ */
+html[data-surface='tv'] {
+	font-size: clamp(16px, 1.15vw + 0.45vh, 56px);
+	overflow: hidden;
+}
+html[data-surface='tv'] body {
+	height: 100dvh;
+	overflow: hidden;
+	cursor: none;
+	overscroll-behavior: none;
+}
