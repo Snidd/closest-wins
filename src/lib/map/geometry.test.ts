@@ -102,6 +102,26 @@ describe('lngExtent / boundsOf', () => {
 	it('pads small bounds to a minimum span and clamps latitude', () => {
 		expect(padBounds([[10, 20], [10, 20]], 2)).toEqual([[9, 19], [11, 21]]);
 		expect(padBounds([[0, 84], [1, 84]], 4)[1][1]).toBe(85);
+		// Unchanged inside the map's latitude range.
+		expect(padBounds([[0, 10], [5, 60]], 20)).toEqual([[-7.5, 10], [12.5, 60]]);
+	});
+	it.each([
+		[89, 1.5],
+		[88, 20],
+		[85.04, 1.5],
+		[-89.9, 1.5],
+		[-86, 20],
+		[90, 0.5]
+	])('never inverts latitude near a pole (target %d°, min span %d°)', (lat, span) => {
+		const [[, s], [, n]] = padBounds([[10, lat], [10, lat]], span);
+		expect(s).toBeLessThan(n);
+		expect(n - s).toBeCloseTo(span, 9);
+		expect(s).toBeGreaterThanOrEqual(-85);
+		expect(n).toBeLessThanOrEqual(85);
+	});
+	it('clamps wide bounds reaching past a pole without inverting them', () => {
+		expect(padBounds([[0, -89], [30, -60]], 20)).toEqual([[0, -85], [30, -60]]);
+		expect(padBounds([[0, -89], [30, 89]], 20)).toEqual([[0, -85], [30, 85]]);
 	});
 });
 

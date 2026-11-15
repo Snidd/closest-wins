@@ -11,8 +11,11 @@
  * left unchanged and '' clears it.
  */
 import * as v from 'valibot';
+import { MAX_LOCATION_LAT } from '#lib/geo.ts';
 
 export const TEXT_MAX = { name: 120, clue: 1000, fact: 2000, attribution: 300 } as const;
+
+export const LATITUDE_RANGE_MESSAGE = `Latitude must be between -${MAX_LOCATION_LAT} and ${MAX_LOCATION_LAT} (the map cannot show the poles)`;
 
 /** Optional text: trimmed, '' / missing → null. */
 const optionalText = (max: number) =>
@@ -37,7 +40,13 @@ export const LocationFields = v.object({
 	clueTextEn: optionalText(TEXT_MAX.clue),
 	factSv: optionalText(TEXT_MAX.fact),
 	factEn: optionalText(TEXT_MAX.fact),
-	lat: v.pipe(v.number(), v.finite(), v.minValue(-90), v.maxValue(90)),
+	/** Within what the (Web Mercator) map can show and a phone can aim at: ±`MAX_LOCATION_LAT`. */
+	lat: v.pipe(
+		v.number(),
+		v.finite(),
+		v.minValue(-MAX_LOCATION_LAT, LATITUDE_RANGE_MESSAGE),
+		v.maxValue(MAX_LOCATION_LAT, LATITUDE_RANGE_MESSAGE)
+	),
 	lng: v.pipe(v.number(), v.finite(), v.minValue(-180), v.maxValue(180)),
 	photoId: OptionalUuid
 });

@@ -1,11 +1,13 @@
 /** Server identity and the briefing a connecting agent receives in `initialize`. */
+import { MAX_LOCATION_LAT } from '#lib/geo.ts';
+
 export const SERVER_INFO = { name: 'closest-wins-content', title: 'Closest Wins content', version: '1.0.0' } as const;
 
 export const INSTRUCTIONS = `\
 Closest Wins (Swedish: "Närmast vinner") is a party map-guessing game. Each round, players see a clue (a photo and/or a short text) and place a cross on a blank world map: land, water, relief and country borders only, no labels, cities or roads. Whoever is closest to the real point wins the round (great-circle distance in km). This server manages the game CONTENT only: locations and playlists. It cannot create or control games.
 
 LOCATIONS
-- lat/lng is the answer. It must be the precise point of the place (the building, summit, waterfall, square), in WGS84 decimal degrees with about 4-5 decimals, never a city centre or a rough guess. Double-check the sign: south and west are negative. For a large target (a country, lake, desert, mountain range) pick one representative point and mention it in the fact.
+- lat/lng is the answer. It must be the precise point of the place (the building, summit, waterfall, square), in WGS84 decimal degrees with about 4-5 decimals, never a city centre or a rough guess. Double-check the sign: south and west are negative. Latitude must lie between -${MAX_LOCATION_LAT} and ${MAX_LOCATION_LAT}: the game map cannot show the poles, so pick a point within that range (e.g. the North Pole is not possible). For a large target (a country, lake, desert, mountain range) pick one representative point and mention it in the fact.
 - Players see ONLY the clue during the round (the photo and/or clueText). The name and the fact are shown after the reveal. So the clue must not contain the name or an obvious giveaway (no place names, no captions or signs naming it). A good clue can be reasoned about: landscape, vegetation, architecture, climate, a script on signs, a riddle-like description. Prefer recognisable places that are fun to locate on a map without labels.
 - Fields: name (what the place is called, shown at the reveal); clueText (shown during the round; optional when there is a photo); fact (optional, 1-3 short, true and surprising sentences shown at the reveal); photo (optional clue image).
 - Rules: a location needs a name in at least one language and a clue (a photo, a clue text, or both).

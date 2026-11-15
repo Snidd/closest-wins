@@ -153,12 +153,16 @@ describe('locations', () => {
 		await expectCode(createLocation({ ...input(), nameEn: null }), 'INVALID', /name/);
 		await expectCode(createLocation({ ...input(), clueTextEn: null }), 'INVALID', /photo or a clue/);
 		await expectCode(createLocation({ ...input(), lat: 91 }), 'INVALID', /Latitude/);
+		// The map cannot show (nor a phone aim at) the poles.
+		await expectCode(createLocation({ ...input(), lat: 85.5 }), 'INVALID', /Latitude/);
+		await expectCode(createLocation({ ...input(), lat: -89 }), 'INVALID', /Latitude/);
 		await expectCode(createLocation({ ...input(), nameEn: 'x'.repeat(121) }), 'INVALID', /at most/);
 		await expectCode(createLocation({ ...input(), photoId: randomUUID() }), 'INVALID', /photo/);
 
 		const l = await newLocation();
 		await expectCode(updateLocation({ id: l.id, clueTextEn: null }), 'INVALID', /photo or a clue/);
 		await expectCode(updateLocation({ id: l.id, nameEn: null }), 'INVALID', /name/);
+		await expectCode(updateLocation({ id: l.id, lat: 86 }), 'INVALID', /Latitude/);
 		await expectCode(updateLocation({ id: randomUUID(), nameEn: 'x' }), 'NOT_FOUND');
 
 		const updated = await updateLocation({ id: l.id, nameSv: `  ${TAG} Ny  `, lat: -33.5 });

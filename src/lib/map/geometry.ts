@@ -160,7 +160,14 @@ export function boundsOf(points: LngLatTuple[]): Bounds | null {
 	];
 }
 
-/** Grows bounds around their centre so each side spans at least `minSpanDeg`. */
+/** Latitudes the camera frames (just inside what Web Mercator can show). */
+const CAMERA_MAX_LAT = 85;
+
+/**
+ * Grows bounds around their centre so each side spans at least `minSpanDeg`, then clamps
+ * latitude to ±`CAMERA_MAX_LAT` (both sides on both ends, so south never ends up north of
+ * north). If clamping at a pole leaves less than the minimum span, it grows towards the equator.
+ */
 export function padBounds(bounds: Bounds, minSpanDeg: number): Bounds {
 	let [[w, s], [e, n]] = bounds;
 	if (e - w < minSpanDeg) {
@@ -173,9 +180,17 @@ export function padBounds(bounds: Bounds, minSpanDeg: number): Bounds {
 		s = c - minSpanDeg / 2;
 		n = c + minSpanDeg / 2;
 	}
+	const clampLat = (lat: number) => Math.max(-CAMERA_MAX_LAT, Math.min(CAMERA_MAX_LAT, lat));
+	s = clampLat(s);
+	n = clampLat(n);
+	const need = Math.min(minSpanDeg, 2 * CAMERA_MAX_LAT);
+	if (n - s < need) {
+		if (n >= CAMERA_MAX_LAT) s = CAMERA_MAX_LAT - need;
+		else n = -CAMERA_MAX_LAT + need;
+	}
 	return [
-		[w, Math.max(-85, s)],
-		[e, Math.min(85, n)]
+		[w, s],
+		[e, n]
 	];
 }
 

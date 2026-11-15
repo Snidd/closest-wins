@@ -49,7 +49,9 @@ describe('MCP zod shapes match the shared valibot schemas', () => {
 			same(f, create[f], LocationFields.entries[f], strings(max));
 			same(`patch ${f}`, patch[f], LocationFields.entries[f], strings(max));
 		}
-		same('lat', create.lat, LocationFields.entries.lat, [...nums(-90, 90), -89.999999, 0]);
+		same('lat', create.lat, LocationFields.entries.lat, [...nums(-85, 85), 85.04, -89.999999, 90, 0]);
+		expect(v.safeParse(LocationFields.entries.lat, 85).success).toBe(true);
+		expect(v.safeParse(LocationFields.entries.lat, 85.0001).success).toBe(false);
 		same('lng', create.lng, LocationFields.entries.lng, [...nums(-180, 180), 179.999999, 0]);
 	});
 

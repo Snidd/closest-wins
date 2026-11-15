@@ -8,6 +8,7 @@
 	import { beforeNavigate, goto } from '$app/navigation';
 	import { createLocation, deleteLocation, updateLocation } from '#lib/remote/content.remote.ts';
 	import { TEXT_MAX } from '#lib/content/schemas.ts';
+	import { MAX_LOCATION_LAT } from '#lib/geo.ts';
 	import type { LocationWithPhoto } from '#lib/server/content/locations.ts';
 	import type { Photo } from '#lib/server/db/schema.ts';
 	import { useLocale, useT } from '#lib/i18n/context.ts';
@@ -76,8 +77,8 @@
 				factEn: text(TEXT_MAX.fact),
 				lat: v.pipe(
 					v.number(t().latRequired),
-					v.minValue(-90, t().latRequired),
-					v.maxValue(90, t().latRequired)
+					v.minValue(-MAX_LOCATION_LAT, t().latRequired),
+					v.maxValue(MAX_LOCATION_LAT, t().latRequired)
 				),
 				lng: v.pipe(
 					v.number(t().lngRequired),

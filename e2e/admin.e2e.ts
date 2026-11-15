@@ -192,10 +192,10 @@ test('admin pages render in Swedish and the editor refuses invalid input', async
 	await expect(page.getByRole('heading', { name: 'Ny plats' })).toBeVisible();
 
 	await page.getByLabel('Namn (Svenska)').fill(`${TAG} Plats`);
-	await page.getByLabel('Latitud').fill('95');
+	await page.getByLabel('Latitud').fill('86'); // valid on Earth, but the map cannot show it
 	await page.getByLabel('Longitud').fill('10');
 	await page.getByRole('button', { name: 'Skapa plats' }).click();
-	await expect(page.getByText('Ange en latitud mellan -90 och 90.')).toBeVisible();
+	await expect(page.getByText('Ange en latitud mellan -85 och 85 (kartan kan inte visa polerna).')).toBeVisible();
 	await expect(page.getByText('Lägg till ett foto eller en ledtrådstext på minst ett språk.')).toBeVisible();
 	await expect(page).toHaveURL(/\/admin\/locations\/new$/);
 

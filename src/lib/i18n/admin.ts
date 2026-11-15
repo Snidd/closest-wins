@@ -1,4 +1,5 @@
 /** Admin UI strings. Owned by the content/admin agent; extend freely (keep sv/en in sync). */
+import { MAX_LOCATION_LAT } from '#lib/geo.ts';
 import { defineDict } from './dict.ts';
 
 export const admin = defineDict({
@@ -93,7 +94,7 @@ export const admin = defineDict({
 			playlists === 0 ? 'Not used in any playlist.' : playlists === 1 ? 'Used in 1 playlist.' : `Used in ${playlists} playlists.`,
 		nameRequired: 'Enter a name in at least one language.',
 		clueRequired: 'Add a photo or a clue text in at least one language.',
-		latRequired: 'Enter a latitude between -90 and 90.',
+		latRequired: `Enter a latitude between -${MAX_LOCATION_LAT} and ${MAX_LOCATION_LAT} (the map cannot show the poles).`,
 		lngRequired: 'Enter a longitude between -180 and 180.',
 		tooLong: (max: number) => `At most ${max} characters.`,
 		fallbackNote: (lang: string) => `Players using ${lang} see the other language.`,
@@ -287,7 +288,7 @@ export const admin = defineDict({
 			playlists === 0 ? 'Används inte i någon spellista.' : playlists === 1 ? 'Används i 1 spellista.' : `Används i ${playlists} spellistor.`,
 		nameRequired: 'Ange ett namn på minst ett språk.',
 		clueRequired: 'Lägg till ett foto eller en ledtrådstext på minst ett språk.',
-		latRequired: 'Ange en latitud mellan -90 och 90.',
+		latRequired: `Ange en latitud mellan -${MAX_LOCATION_LAT} och ${MAX_LOCATION_LAT} (kartan kan inte visa polerna).`,
 		lngRequired: 'Ange en longitud mellan -180 och 180.',
 		tooLong: (max) => `Högst ${max} tecken.`,
 		fallbackNote: (lang) => `Spelare som använder ${lang} ser det andra språket.`,

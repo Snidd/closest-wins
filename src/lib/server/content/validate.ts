@@ -3,7 +3,8 @@
  * raw input with the same schemas before calling a service).
  */
 import * as v from 'valibot';
-import { TEXT_MAX } from '#lib/content/schemas.ts';
+import { LATITUDE_RANGE_MESSAGE, TEXT_MAX } from '#lib/content/schemas.ts';
+import { MAX_LOCATION_LAT } from '#lib/geo.ts';
 import type { Locale } from '#lib/i18n/locale.ts';
 import { ContentError } from './errors.ts';
 
@@ -58,7 +59,10 @@ export interface LocationShapeForCheck {
 	photoId: string | null;
 }
 
-/** The location rules (mirrors the schema and the DB CHECKs) on a complete, merged row. */
+/**
+ * The location rules on a complete, merged row (mirrors the schema and the DB CHECKs; latitude
+ * is stricter than the DB's ±90: ±`MAX_LOCATION_LAT`, what the map can show).
+ */
 export function checkLocation(l: LocationShapeForCheck): void {
 	if (!filled(l.nameSv) && !filled(l.nameEn)) {
 		throw new ContentError('INVALID', 'A name in at least one language is required');
@@ -66,8 +70,8 @@ export function checkLocation(l: LocationShapeForCheck): void {
 	if (!l.photoId && !filled(l.clueTextSv) && !filled(l.clueTextEn)) {
 		throw new ContentError('INVALID', 'A photo or a clue text is required');
 	}
-	if (!Number.isFinite(l.lat) || l.lat < -90 || l.lat > 90) {
-		throw new ContentError('INVALID', 'Latitude must be between -90 and 90');
+	if (!Number.isFinite(l.lat) || l.lat < -MAX_LOCATION_LAT || l.lat > MAX_LOCATION_LAT) {
+		throw new ContentError('INVALID', LATITUDE_RANGE_MESSAGE);
 	}
 	if (!Number.isFinite(l.lng) || l.lng < -180 || l.lng > 180) {
 		throw new ContentError('INVALID', 'Longitude must be between -180 and 180');

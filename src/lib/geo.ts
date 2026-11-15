@@ -5,6 +5,17 @@ export interface LatLng {
 	lng: number;
 }
 
+/**
+ * The map is Web Mercator: it cannot show latitudes beyond ±85.0511°, and a phone's cross
+ * cannot be moved past them.
+ */
+export const MERCATOR_MAX_LAT = 85.0511287798066;
+/**
+ * Locations (answers) must lie within ±this latitude, so the map can show them and players can
+ * aim at them. Enforced by the content validation (admin, MCP).
+ */
+export const MAX_LOCATION_LAT = 85;
+
 /** Mean Earth radius in kilometres (IUGG). */
 export const EARTH_RADIUS_KM = 6371.0088;
 

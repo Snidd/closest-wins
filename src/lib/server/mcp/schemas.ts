@@ -18,6 +18,7 @@
  * `""` for "clear", so `null` is mapped to `""` here).
  */
 import { z } from 'zod';
+import { MAX_LOCATION_LAT } from '#lib/geo.ts';
 import {
 	ImportPhotoSchema,
 	ListQuerySchema,
@@ -91,9 +92,11 @@ const locationTexts = (patch: boolean) =>
 
 const lat = z
 	.number()
-	.min(-90)
-	.max(90)
-	.describe('Latitude in decimal degrees (WGS84, north positive) of the PRECISE answer point, e.g. 48.85837.');
+	.min(-MAX_LOCATION_LAT)
+	.max(MAX_LOCATION_LAT)
+	.describe(
+		`Latitude in decimal degrees (WGS84, north positive) of the PRECISE answer point, e.g. 48.85837. Between -${MAX_LOCATION_LAT} and ${MAX_LOCATION_LAT}: the game map cannot show the poles.`
+	);
 const lng = z
 	.number()
 	.min(-180)
