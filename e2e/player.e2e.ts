@@ -16,6 +16,8 @@ import {
 	type TestGame
 } from './helpers/fixtures.ts';
 import { GUESS_DEBOUNCE_WAIT, joinViaUi, newPhone, panMap, type PhoneOptions } from './helpers/phone.ts';
+import { remoteId } from './helpers/remote.ts';
+import { SimPlayer } from './helpers/sim.ts';
 
 test.use({
 	// Headless WebGL via SwiftShader (MapLibre).
@@ -371,6 +373,40 @@ test('a failed lock-in can be retried, and the position keeps being sent', async
 	await page.getByTestId('lock-in').tap();
 	await expect(page.getByTestId('locked-panel')).toBeVisible();
 	await expect.poll(async () => (await currentGuess(g.id, me))?.locked_at ?? null).not.toBeNull();
+});
+
+test('a round the server is late to end does not make the phone reconnect on every snapshot', async ({
+	browser
+}) => {
+	const h = await getHost(browser);
+	const g = await game({ timerSeconds: 90 });
+	const { page } = await phone(browser);
+	await joinViaUi(page, g.code, uniq('Wait'));
+	await h.startRound(g.id);
+	await expect(page.getByTestId('round')).toBeVisible();
+
+	const opened: number[] = [];
+	const stream = `/_app/remote/${remoteId('game', 'playerState')}`;
+	page.on('request', (r) => {
+		if (r.url().includes(stream)) opened.push(Date.now());
+	});
+	// The deadline the phone sees is long past, but the server keeps the round running (as when
+	// it is retrying a round end that failed).
+	await db()`update game_round set ends_at = now() - interval '10 seconds'
+		where game_id = ${g.id} and started_at is not null and ended_at is null`;
+	// Snapshots keep coming: other players join and come and go.
+	for (let i = 0; i < 3; i++) {
+		const p = new SimPlayer(g.code, uniq('Sim'));
+		cleanups.push(async () => p.disconnect());
+		await p.join();
+		p.disconnect();
+		await p.connect();
+	}
+	await page.waitForTimeout(5000);
+	// One resync for the overdue round, then backoff (the next one is 8 s later).
+	expect(opened.length).toBeGreaterThanOrEqual(1);
+	expect(opened.length).toBeLessThanOrEqual(2);
+	await expect(page.getByTestId('round')).toBeVisible();
 });
 
 test('losing the connection shows an indicator and recovers by itself', async ({ browser }) => {

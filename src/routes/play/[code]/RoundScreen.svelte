@@ -33,6 +33,9 @@
 	}));
 
 	const round = $derived(s.round);
+	/** No reveal this long after `endsAt`: the stream may be stale. Then retry with backoff. */
+	const STALE_AFTER_MS = 4000;
+	const STALE_RETRY_MS = (attempt: number) => Math.min(30_000, STALE_AFTER_MS * 2 ** attempt);
 	const me = $derived(s.me);
 	const canGuess = $derived(s.canGuess);
 	const isSuddenDeath = $derived(round.isSuddenDeath);
@@ -123,10 +126,13 @@
 		void send(g);
 	}
 
+	/** The deadline as a number: effects keyed on it do not re-run for every new snapshot. */
+	const endsAt = $derived(round.endsAt);
+
 	// Final position right before the deadline (a pending debounced update may not make it).
 	$effect(() => {
 		if (!canGuess || locked) return;
-		const due = round.endsAt - 250 - clock.now();
+		const due = endsAt - 250 - untrack(() => clock.now());
 		const id = setTimeout(
 			() => {
 				if (map && untrack(() => touched && !locked)) void send(map.getGuess());
@@ -137,10 +143,22 @@
 	});
 
 	// The server ends the round ~0.5 s after `endsAt`. If no reveal arrives a few seconds later,
-	// the stream may be stale (sleeping phone, dead connection): ask for a fresh snapshot.
+	// the stream may be stale (sleeping phone, dead connection): ask for a fresh snapshot. If the
+	// round is still running after that, the server is late (e.g. retrying a failed round end),
+	// not this phone: back off (4 s, 8 s, … 30 s), or every phone would reconnect on every
+	// snapshot and flap everyone's presence. Snapshots of the same overdue round (same `endsAt`)
+	// neither re-run this nor reset the backoff.
 	$effect(() => {
-		const due = round.endsAt + 4000 - clock.now();
-		const id = setTimeout(onresync, Math.max(0, due));
+		const deadline = endsAt;
+		let attempt = 0;
+		let id: ReturnType<typeof setTimeout> | undefined;
+		const arm = (delay: number) => {
+			id = setTimeout(() => {
+				onresync();
+				arm(STALE_RETRY_MS(++attempt));
+			}, delay);
+		};
+		arm(Math.max(0, deadline + STALE_AFTER_MS - untrack(() => clock.now())));
 		return () => clearTimeout(id);
 	});
 
