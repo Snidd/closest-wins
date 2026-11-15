@@ -144,7 +144,7 @@ export const host = defineDict({
 		showFinalResult: 'Show final result',
 		finalNext: 'That was the last round.',
 		wins: 'Wins',
-		total: 'Total',
+		total: 'Distance',
 		rank: '#',
 
 		// --- Finished ---------------------------------------------------------------------------
@@ -313,7 +313,7 @@ export const host = defineDict({
 		showFinalResult: 'Visa slutresultatet',
 		finalNext: 'Det var sista rundan.',
 		wins: 'Vinster',
-		total: 'Totalt',
+		total: 'Avstånd',
 		rank: '#',
 
 		winnerIs: (name) => `${name} vinner!`,
