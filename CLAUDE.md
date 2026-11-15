@@ -10,7 +10,10 @@ Read `INTEND.md` (product + rules) and the approved plan before changing behavio
    columns while a round is running. This applies to every role, including the host.
 2. **All content reads/writes go through `src/lib/server/content/`** (locations, playlists,
    photos). Admin remote functions and MCP tools both call it; validation lives once in
-   `src/lib/content/schemas.ts`. Nothing else touches those tables.
+   `src/lib/content/schemas.ts`. Nothing else touches those tables, with one exception:
+   `src/lib/server/game/library.ts` holds the engine's narrow read-only selects (`clues()` never
+   reads coordinates, name or fact; `targets()` only runs for ended rounds), because the
+   content functions return whole rows including the answer.
 
 ## This stack is newer than most docs (SvelteKit 3.2, Svelte 5.57, Vite 8, TS 6)
 

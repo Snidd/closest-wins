@@ -5,7 +5,10 @@ export const PMTILES_URL = '/map/world.pmtiles';
 /** MapLibre source URL using the pmtiles:// protocol (register the protocol first). */
 export const PMTILES_SOURCE_URL = `pmtiles://${PMTILES_URL}`;
 
-/** Highest zoom level present in the tile file. */
+/**
+ * Highest zoom level present in the tile file (`scripts/fetch-map.sh` MAXZOOM). z8 keeps the
+ * file at ~118 MB; z9 would be ~345 MB.
+ */
 export const TILE_MAX_ZOOM = 8;
 /** Highest zoom the user may reach (overzooming the z8 tiles). Tune in play testing. */
 export const MAX_ZOOM = 10;
@@ -19,3 +22,12 @@ export const WORLD_VIEW = {
 
 /** Debounce for `updateGuess` while panning. */
 export const GUESS_UPDATE_DEBOUNCE_MS = 400;
+/** While the user keeps panning, still report at least this often. */
+export const GUESS_UPDATE_MAX_WAIT_MS = 2000;
+
+/**
+ * Required attribution for the tiles: OpenStreetMap data is ODbL (attribution required);
+ * Protomaps packages it; Natural Earth (rivers, low zooms) is public domain.
+ */
+export const ATTRIBUTION_HTML =
+	'© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> · <a href="https://protomaps.com" target="_blank" rel="noopener">Protomaps</a>';

@@ -30,7 +30,7 @@ test('protected pages require the admin password', async ({ page }) => {
 	await password.fill(process.env.ADMIN_PASSWORD!);
 	await page.getByRole('button', { name: 'Log in' }).click();
 	await expect(page).toHaveURL(/\/admin$/);
-	await expect(page.getByText('TODO admin')).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible();
 
 	// The session cookie also unlocks hosting.
 	await page.goto('/host');

@@ -1,12 +1,17 @@
 /**
- * In-process change notification per game (single Node process by design). The engine calls
- * `notifyGame(gameId)` after every committed state change; live queries iterate `gameChanges`.
- * Implemented in Wave 0; the engine owner may extend it.
+ * In-process change notification (single Node process by design). The engine calls
+ * `notifyGame(key)` after every committed state change; live queries iterate `gameChanges` /
+ * `watchChannels`.
+ *
+ * Channels are plain strings. Game channels are the game id; the engine also uses
+ * `tv:<tvId>` (a TV's pairing changed) and `code:<JOINCODE>` (a game with that join code was
+ * created) so streams that are not yet attached to a game can follow along.
  */
 
 type Listener = () => void;
 
 const listeners = new Map<string, Set<Listener>>();
+const versions = new Map<string, number>();
 
 export function subscribeGame(gameId: string, listener: Listener): () => void {
 	let set = listeners.get(gameId);
@@ -18,8 +23,9 @@ export function subscribeGame(gameId: string, listener: Listener): () => void {
 	};
 }
 
-/** Wake every subscriber of the game. Cheap; call after each committed change. */
+/** Wake every subscriber of the channel. Cheap; call after each committed change. */
 export function notifyGame(gameId: string): void {
+	versions.set(gameId, (versions.get(gameId) ?? 0) + 1);
 	const set = listeners.get(gameId);
 	if (!set) return;
 	for (const l of [...set]) {
@@ -31,31 +37,61 @@ export function notifyGame(gameId: string): void {
 	}
 }
 
+/**
+ * Monotonic per-channel change counter for the process lifetime (snapshot caching: equal
+ * versions mean nothing was notified in between). One number per channel ever notified.
+ */
+export function gameVersion(gameId: string): number {
+	return versions.get(gameId) ?? 0;
+}
+
 export function subscriberCount(gameId: string): number {
 	return listeners.get(gameId)?.size ?? 0;
 }
 
+/** Total number of subscriptions over all channels (leak checks in tests). */
+export function totalSubscriberCount(): number {
+	let n = 0;
+	for (const set of listeners.values()) n += set.size;
+	return n;
+}
+
 /**
- * Yields once immediately, then once per change (bursts are coalesced: if several changes
- * happen while the consumer is busy, it wakes once). Ends when `signal` aborts or the consumer
- * stops iterating (`return()` from `for await` / client disconnect).
- *
- * ```ts
- * export const hostState = query.live(HostStateArgSchema, async function* (gameId) {
- * 	for await (const _ of gameChanges(gameId)) yield await buildHostSnapshot(gameId);
- * });
- * ```
+ * Like `gameChanges`, but over a set of channels that may change between iterations:
+ * `getKeys()` is re-read every time the consumer asks for the next change. A newly added
+ * channel forces one extra wake-up, because a change on it may have happened while the consumer
+ * was building its last value.
  */
-export async function* gameChanges(gameId: string, signal?: AbortSignal): AsyncGenerator<void> {
+export async function* watchChannels(
+	getKeys: () => readonly string[],
+	signal?: AbortSignal
+): AsyncGenerator<void> {
 	let dirty = true;
 	let wake: (() => void) | null = null;
-	const unsubscribe = subscribeGame(gameId, () => {
+	const subs = new Map<string, () => void>();
+	const listener = () => {
 		dirty = true;
 		wake?.();
-	});
+	};
+	const sync = (initial: boolean) => {
+		const keys = new Set(getKeys());
+		for (const [key, unsubscribe] of subs) {
+			if (!keys.has(key)) {
+				unsubscribe();
+				subs.delete(key);
+			}
+		}
+		for (const key of keys) {
+			if (!subs.has(key)) {
+				subs.set(key, subscribeGame(key, listener));
+				if (!initial) dirty = true;
+			}
+		}
+	};
 	const onAbort = () => wake?.();
 	signal?.addEventListener('abort', onAbort);
 	try {
+		sync(true);
 		while (!signal?.aborted) {
 			if (!dirty) {
 				await new Promise<void>((resolve) => (wake = resolve));
@@ -64,9 +100,23 @@ export async function* gameChanges(gameId: string, signal?: AbortSignal): AsyncG
 			}
 			dirty = false;
 			yield;
+			sync(false);
 		}
 	} finally {
-		unsubscribe();
+		for (const unsubscribe of subs.values()) unsubscribe();
+		subs.clear();
 		signal?.removeEventListener('abort', onAbort);
 	}
+}
+
+/**
+ * Yields once immediately, then once per change (bursts are coalesced: if several changes
+ * happen while the consumer is busy, it wakes once). Ends when `signal` aborts or the consumer
+ * stops iterating (`return()` from `for await` / client disconnect).
+ *
+ * Pass the request's abort signal from live queries: Kit's `generator.return()` cannot
+ * interrupt a pending `await`, so the signal is what wakes and ends an idle stream.
+ */
+export function gameChanges(gameId: string, signal?: AbortSignal): AsyncGenerator<void> {
+	return watchChannels(() => [gameId], signal);
 }

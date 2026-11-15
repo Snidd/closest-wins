@@ -1,16 +1,17 @@
 /**
- * Pure game rules (no I/O), unit tested. STUB (Wave 0): signatures are final.
+ * Pure game rules (no I/O), unit tested in rules.test.ts.
  *
  * - Distance: great-circle (haversine) km, `haversineKm` from `#lib/geo.ts`.
  * - A guess counts if it was locked in, or if the player touched the map that round.
  * - Winner takes the round: the closest counting guess gets 1 point; exact ties all score;
- *   nobody scores if nobody has a counting guess. Only eligible players count (sudden death).
+ *   nobody scores if nobody has a counting guess. Only eligible players count (sudden death,
+ *   late joiners, kicked players).
  * - Game winner: most rounds won. A tie for the lead after the planned rounds triggers sudden
  *   death between the tied leaders on a random unused location; if none is left they share.
+ *   If nobody won a single round, nobody wins.
  */
-import type { LatLng } from '#lib/geo.ts';
+import { haversineKm, normalizeLatLng, type LatLng } from '#lib/geo.ts';
 import type { NextStep, StandingRow } from '#lib/game/types.ts';
-import { notImplemented } from '../not-implemented.ts';
 
 export { haversineKm } from '#lib/geo.ts';
 
@@ -52,11 +53,24 @@ export interface StandingPlayer {
 }
 
 export function countsAsGuess(guess: Pick<GuessRecord, 'touched' | 'lockedAt'>): boolean {
-	return notImplemented('countsAsGuess');
+	return guess.lockedAt !== null || guess.touched;
 }
 
 /**
- * Scores one round. `eligiblePlayerIds` null means all `playerIds` are eligible.
+ * Competition ranks ("1, 1, 3") for values sorted ascending by `key`; equal keys share a rank.
+ */
+function competitionRanks<T>(sorted: readonly T[], key: (t: T) => number): number[] {
+	const ranks: number[] = [];
+	for (let i = 0; i < sorted.length; i++) {
+		ranks.push(i > 0 && key(sorted[i]!) === key(sorted[i - 1]!) ? ranks[i - 1]! : i + 1);
+	}
+	return ranks;
+}
+
+/**
+ * Scores one round. `playerIds` are the players still in the game (not kicked);
+ * `eligiblePlayerIds` null means all `playerIds` are eligible. Guesses of players outside the
+ * eligible set are ignored, as are duplicate guesses for one player (first wins).
  */
 export function scoreRound(
 	target: LatLng,
@@ -64,20 +78,92 @@ export function scoreRound(
 	playerIds: readonly string[],
 	eligiblePlayerIds: readonly string[] | null
 ): RoundScore {
-	return notImplemented('scoreRound');
+	const present = new Set(playerIds);
+	const eligible = (eligiblePlayerIds ?? playerIds).filter((id) => present.has(id));
+	const eligibleSet = new Set(eligible);
+	const goal = normalizeLatLng(target);
+
+	const counted = new Map<string, number>();
+	for (const g of guesses) {
+		if (!eligibleSet.has(g.playerId) || counted.has(g.playerId) || !countsAsGuess(g)) continue;
+		counted.set(g.playerId, haversineKm(normalizeLatLng(g), goal));
+	}
+
+	const sorted = [...counted.entries()]
+		.map(([playerId, distanceKm]) => ({ playerId, distanceKm }))
+		.sort((a, b) => a.distanceKm - b.distanceKm || (a.playerId < b.playerId ? -1 : 1));
+	const ranks = competitionRanks(sorted, (s) => s.distanceKm);
+	const scored: ScoredGuess[] = sorted.map((s, i) => ({
+		...s,
+		rank: ranks[i]!,
+		isWinner: ranks[i] === 1
+	}));
+
+	return {
+		scored,
+		winnerPlayerIds: scored.filter((s) => s.isWinner).map((s) => s.playerId),
+		noGuessPlayerIds: eligible.filter((id) => !counted.has(id))
+	};
 }
 
-/** Standings ordered by roundsWon desc (then totalDistanceKm asc for display only). */
+/**
+ * Standings ordered by roundsWon desc; for display only, then by guessedRounds desc (a player
+ * who skipped rounds has an artificially low total), totalDistanceKm asc, then input (join)
+ * order. Ranks depend on roundsWon only.
+ */
 export function computeStandings(
 	players: readonly StandingPlayer[],
 	rounds: readonly RoundOutcome[]
 ): Omit<StandingRow, 'connected'>[] {
-	return notImplemented('computeStandings');
+	const rows = players.map((p, order) => {
+		let roundsWon = 0;
+		let totalDistanceKm = 0;
+		let guessedRounds = 0;
+		for (const r of rounds) {
+			if (r.winnerPlayerIds.includes(p.id)) roundsWon++;
+			const d = r.distances.get(p.id);
+			if (d !== undefined) {
+				guessedRounds++;
+				totalDistanceKm += d;
+			}
+		}
+		return { p, order, roundsWon, totalDistanceKm, guessedRounds };
+	});
+	rows.sort(
+		(a, b) =>
+			b.roundsWon - a.roundsWon ||
+			b.guessedRounds - a.guessedRounds ||
+			a.totalDistanceKm - b.totalDistanceKm ||
+			a.order - b.order
+	);
+	// Ranks by roundsWon only (sorted descending, so negate for the ascending helper).
+	const ranks = competitionRanks(rows, (r) => -r.roundsWon);
+	return rows.map((r, i) => ({
+		playerId: r.p.id,
+		nickname: r.p.nickname,
+		color: r.p.color,
+		rank: ranks[i]!,
+		roundsWon: r.roundsWon,
+		totalDistanceKm: r.totalDistanceKm,
+		guessedRounds: r.guessedRounds
+	}));
 }
 
-/** Ids sharing first place by roundsWon (one id means a clear leader). */
+/** Ids sharing first place by roundsWon (one id means a clear leader). Empty for no players. */
 export function leaders(standings: readonly Pick<StandingRow, 'playerId' | 'roundsWon'>[]): string[] {
-	return notImplemented('leaders');
+	if (standings.length === 0) return [];
+	const top = Math.max(...standings.map((s) => s.roundsWon));
+	return standings.filter((s) => s.roundsWon === top).map((s) => s.playerId);
+}
+
+/** Winners if the game ended right now: the leaders, or nobody if no round was won. */
+export function currentWinners(
+	standings: readonly Pick<StandingRow, 'playerId' | 'roundsWon'>[]
+): string[] {
+	const top = leaders(standings);
+	if (top.length === 0) return [];
+	const won = standings.find((s) => s.playerId === top[0])!.roundsWon;
+	return won > 0 ? top : [];
 }
 
 /**
@@ -92,12 +178,29 @@ export function decideNextStep(args: {
 	standings: readonly Pick<StandingRow, 'playerId' | 'roundsWon'>[];
 	unusedLocationIds: readonly string[];
 }): NextStep {
-	return notImplemented('decideNextStep');
+	const { regularRoundsPlayed, totalRounds, standings, unusedLocationIds } = args;
+	if (regularRoundsPlayed < totalRounds) return { kind: 'round', number: regularRoundsPlayed + 1 };
+
+	const winners = currentWinners(standings);
+	if (winners.length <= 1) return { kind: 'finish', winnerPlayerIds: winners };
+	if (unusedLocationIds.length === 0) return { kind: 'finish', winnerPlayerIds: winners };
+	return { kind: 'suddenDeath', eligiblePlayerIds: winners };
+}
+
+/** Fisher–Yates shuffle (copy). */
+export function shuffled<T>(items: readonly T[], rng: () => number = Math.random): T[] {
+	const out = [...items];
+	for (let i = out.length - 1; i > 0; i--) {
+		const j = Math.min(i, Math.floor(rng() * (i + 1)));
+		[out[i], out[j]] = [out[j]!, out[i]!];
+	}
+	return out;
 }
 
 /**
  * The location ids for the regular rounds: the first `count` of the playlist order, or `count`
- * random ones; then shuffled if `shuffle`.
+ * random ones (kept in playlist order); then shuffled if `shuffle`. Duplicates are dropped and
+ * `count` is capped at the number of distinct locations.
  */
 export function pickRoundLocations(
 	playlistLocationIds: readonly string[],
@@ -106,10 +209,20 @@ export function pickRoundLocations(
 	shuffle: boolean,
 	rng: () => number = Math.random
 ): string[] {
-	return notImplemented('pickRoundLocations');
+	const ids = [...new Set(playlistLocationIds)];
+	const n = Math.max(0, Math.min(Math.floor(count), ids.length));
+	let picked: string[];
+	if (selection === 'first') {
+		picked = ids.slice(0, n);
+	} else {
+		const chosen = new Set(shuffled(ids, rng).slice(0, n));
+		picked = ids.filter((id) => chosen.has(id));
+	}
+	return shuffle ? shuffled(picked, rng) : picked;
 }
 
 /** A random element, or null for an empty list (sudden-death location pick). */
 export function pickRandom<T>(items: readonly T[], rng: () => number = Math.random): T | null {
-	return notImplemented('pickRandom');
+	if (items.length === 0) return null;
+	return items[Math.min(items.length - 1, Math.floor(rng() * items.length))]!;
 }

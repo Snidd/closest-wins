@@ -319,7 +319,16 @@ export type HostSnapshot = SnapshotCommon & {
 // TV
 // ---------------------------------------------------------------------------------------------
 
-export type TvSnapshot = SnapshotCommon & { role: 'tv'; status: 'paired' } & PhaseState;
+export type TvSnapshot = SnapshotCommon & {
+	role: 'tv';
+	status: 'paired';
+	/**
+	 * Only once the game is `finished`: the code that pairs this screen with the host's next
+	 * game (show it small next to the final standings). Pairing moves the stream to the new
+	 * game without a reconnect.
+	 */
+	nextPairing?: { pairingCode: string; codeExpiresAt: EpochMs };
+} & PhaseState;
 
 /** What `tvState()` yields when the screen is not paired with a game. */
 export type TvGate =
