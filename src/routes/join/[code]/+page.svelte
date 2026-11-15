@@ -68,6 +68,11 @@
 		]
 	);
 	let submitError = $state<string | null>(null);
+	/** Set once the page is interactive (tests wait for it; before that the form posts natively). */
+	let hydrated = $state(false);
+	$effect(() => {
+		hydrated = true;
+	});
 	const formMessages = $derived(submitError ? [submitError, ...otherIssues] : otherIssues);
 
 	/** Never let a nickname grow past 16 graphemes while typing or pasting; cut gracefully. */
@@ -136,7 +141,7 @@
 	<title>{t().joinGameCode(data.code)} · {t().appName}</title>
 </svelte:head>
 
-<main class="join" data-state={data.state}>
+<main class="join" data-state={data.state} data-hydrated={hydrated}>
 	<header class="top">
 		<a class="brand" href="/">
 			<img src={mark} alt="" width="28" height="28" />

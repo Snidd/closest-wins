@@ -91,7 +91,13 @@ export const hostState = query.live(
 		requireAdmin();
 		const { request } = getRequestEvent();
 		if (!(await engine.getGame(gameId))) error(404, 'Game not found');
-		yield* hostStream(gameId, request.signal);
+		try {
+			yield* hostStream(gameId, request.signal);
+		} catch (e) {
+			// E.g. the game was deleted while the controller was open.
+			if (e instanceof GameError) error(gameErrorStatus(e.code), e.message);
+			throw e;
+		}
 	}
 );
 

@@ -1,34 +1,25 @@
 /**
  * Player phone (`/play/[code]`) on a mobile touch viewport, driving real games: games are
  * inserted into Postgres from the seeded playlists, the host side is driven through the game's
- * remote commands over HTTP (see helpers/player/game.ts), phones join through the real join
+ * remote commands over HTTP (see helpers/fixtures.ts), phones join through the real join
  * page. Needs the dev database (pnpm seed) and data/map/world.pmtiles.
  */
 import { expect, test, type Browser } from '@playwright/test';
+import { closeDb, currentGuess, db, playerIdByNickname } from './helpers/db.ts';
+import { WEBGL_LAUNCH } from './helpers/env.ts';
 import {
 	addBot,
-	closeDb,
-	createGame,
-	createPhotoLocation,
-	currentGuess,
-	db,
-	GUESS_DEBOUNCE_WAIT,
 	Host,
-	joinViaUi,
-	newPhone,
-	panMap,
-	playerIdByNickname,
+	insertGame as createGame,
+	insertPhotoLocation as createPhotoLocation,
 	type Bot,
-	type PhoneOptions,
 	type TestGame
-} from './helpers/player/game.ts';
+} from './helpers/fixtures.ts';
+import { GUESS_DEBOUNCE_WAIT, joinViaUi, newPhone, panMap, type PhoneOptions } from './helpers/phone.ts';
 
 test.use({
-	launchOptions: {
-		executablePath: '/usr/bin/chromium',
-		// Headless WebGL via SwiftShader (same flags as map.e2e.ts).
-		args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist']
-	}
+	// Headless WebGL via SwiftShader (MapLibre).
+	launchOptions: WEBGL_LAUNCH
 });
 test.describe.configure({ timeout: 90_000 });
 
@@ -38,7 +29,7 @@ let host: Host | null = null;
 const cleanups: Array<() => Promise<unknown>> = [];
 
 async function getHost(browser: Browser) {
-	return (host ??= await Host.login(browser));
+	return (host ??= await Host.login());
 }
 
 async function game(opts: Parameters<typeof createGame>[0] = {}): Promise<TestGame> {

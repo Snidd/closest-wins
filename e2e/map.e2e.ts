@@ -2,6 +2,7 @@
  * Map layer on a phone viewport with real touch input (CDP Input.dispatchTouchEvent), using
  * the /dev/map playground. Needs data/map/world.pmtiles (scripts/fetch-map.sh).
  */
+import { WEBGL_LAUNCH } from './helpers/env.ts';
 import { devices, expect, test, type Page } from '@playwright/test';
 import sharp from 'sharp';
 
@@ -9,11 +10,8 @@ import sharp from 'sharp';
 const { defaultBrowserType: _ignored, ...pixel7 } = devices['Pixel 7'];
 test.use({
 	...pixel7,
-	launchOptions: {
-		executablePath: '/usr/bin/chromium',
-		// Headless WebGL via SwiftShader.
-		args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist']
-	}
+	// Headless WebGL via SwiftShader (MapLibre).
+	launchOptions: WEBGL_LAUNCH
 });
 
 type Pt = { x: number; y: number };

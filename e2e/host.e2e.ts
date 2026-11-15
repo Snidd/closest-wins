@@ -1,18 +1,20 @@
 /**
  * Host controller (`/host`, `/host/[gameId]`). The host's phone is a real browser page; players
- * and the TV are simulated over HTTP with the real remote functions (e2e/helpers/host/sim.ts),
+ * and the TV are simulated over HTTP with the real remote functions (e2e/helpers/sim.ts),
  * so these tests do not depend on the /play or /tv UIs.
  *
  * Every test creates its own game (and TV/players) and removes exactly those afterwards.
  */
 import { expect, test, type Page } from '@playwright/test';
-import { closeDb, Created, createGame, dbGame, LANDMARKS, loginHost } from './helpers/host/fixtures.ts';
+import { createGameViaUi, loginHost } from './helpers/admin.ts';
+import { closeDb, dbGame, LANDMARKS } from './helpers/db.ts';
+import { Created } from './helpers/fixtures.ts';
 
 test.use({ locale: 'en-US', viewport: { width: 390, height: 844 } });
 
 let created: Created;
-test.beforeEach(({ baseURL }) => {
-	created = new Created(baseURL!);
+test.beforeEach(() => {
+	created = new Created();
 });
 test.afterEach(async () => {
 	await created.cleanup();
@@ -20,6 +22,10 @@ test.afterEach(async () => {
 test.afterAll(async () => {
 	await closeDb();
 });
+
+/** Creates a game through the real /host form; the test's registry removes it afterwards. */
+const createGame = (page: Page, reg: Created, opts: { rounds?: number; seconds?: number; playlist?: string } = {}) =>
+	createGameViaUi(page, { ...opts, onCreated: (id) => reg.games.add(id) });
 
 const primary = (page: Page) => page.getByTestId('primary-action');
 const title = (page: Page) => page.getByTestId('phase-title');

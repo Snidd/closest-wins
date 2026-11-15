@@ -1,26 +1,25 @@
 /**
  * Big screen (/tv) at 1920×1080, driving real games through the remote functions (no host /
- * player UI needed; see e2e/helpers/tv/). Each test creates its own playlist, game and TV and
+ * player UI needed; see e2e/helpers/driver.ts). Each test creates its own playlist, game and TV and
  * removes them again; nothing global is asserted, so other agents can share the database.
  *
- * Needs the dev server (E2E_BASE_URL, remote ids are read from Vite) and the map tiles
- * (data/map/world.pmtiles) for the reveal.
+ * Needs the map tiles (data/map/world.pmtiles) for the reveal.
  */
 import { rm } from 'node:fs/promises';
 import path from 'node:path';
 import QRCode from 'qrcode';
+import { WEBGL_LAUNCH } from './helpers/env.ts';
 import { expect, test, type Browser, type Page } from '@playwright/test';
-import { Admin, closeDb, db, GameDriver, loadLocation, SEED } from './helpers/tv/game.ts';
-import { makePhoto } from './helpers/tv/photo.ts';
+import { Admin } from './helpers/admin.ts';
+import { closeDb, db, loadLocation, SEED } from './helpers/db.ts';
+import { GameDriver } from './helpers/driver.ts';
+import { makePhoto } from './helpers/photo.ts';
 
 test.use({
 	viewport: { width: 1920, height: 1080 },
 	locale: 'en-US',
-	launchOptions: {
-		executablePath: '/usr/bin/chromium',
-		// Headless WebGL via SwiftShader (the reveal map).
-		args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist']
-	}
+	// Headless WebGL via SwiftShader (MapLibre).
+	launchOptions: WEBGL_LAUNCH
 });
 test.setTimeout(120_000);
 
@@ -117,7 +116,8 @@ test('pairing switches to the lobby: scannable QR for joinUrl, players appear li
 		await expect(page.getByTestId('tv')).toHaveAttribute('data-game-id', g.gameId);
 
 		// QR: black on white, large, and encoding exactly the join URL.
-		const joinUrl = `${process.env.ORIGIN}/join/${g.joinCode}`;
+		// The server under test runs with ORIGIN = its own base URL (playwright.config.ts).
+		const joinUrl = `${BASE()}/join/${g.joinCode}`;
 		const qr = page.locator('svg.qr').first();
 		await expect(qr.locator('path')).toHaveAttribute('d', expectedQrPath(joinUrl, 2));
 		await expect(qr.locator('rect')).toHaveAttribute('fill', '#ffffff');
