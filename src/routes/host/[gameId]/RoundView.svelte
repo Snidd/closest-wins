@@ -19,7 +19,9 @@
 	const round = $derived(snap.round);
 	const eligibleIds = $derived(new Set(round.eligiblePlayerIds));
 	const lockedIds = $derived(new Set(snap.lockedPlayerIds));
-	const eligible = $derived(snap.players.filter((p) => eligibleIds.has(p.id)));
+	const eligible = $derived(
+		round.eligiblePlayerIds.map((id) => snap.players.find((p) => p.id === id)).filter((p) => p !== undefined)
+	);
 	const locked = $derived(eligible.filter((p) => lockedIds.has(p.id)));
 	const guessing = $derived(eligible.filter((p) => !lockedIds.has(p.id) && p.connected));
 	const offline = $derived(eligible.filter((p) => !lockedIds.has(p.id) && !p.connected));

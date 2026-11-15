@@ -4,7 +4,7 @@
 	import { useT } from '#lib/i18n/context.ts';
 	import { host } from '#lib/i18n/host.ts';
 	import StandingsTable from './StandingsTable.svelte';
-	import { byJoinOrder, listNames, playerLookup, type HostPhase } from './types.ts';
+	import { listNames, playerLookup, type HostPhase } from './types.ts';
 
 	type Props = { snap: HostPhase<'standings'>; locale: Locale };
 	let { snap, locale }: Props = $props();
@@ -13,7 +13,7 @@
 	const who = $derived(playerLookup(snap.players, snap.standings));
 	const round = $derived(snap.result.round);
 	const tied = $derived(
-		snap.next.kind === 'suddenDeath' ? listNames(byJoinOrder(snap.next.eligiblePlayerIds, snap.players).map((id) => who(id).nickname), locale) : ''
+		snap.next.kind === 'suddenDeath' ? listNames(snap.next.eligiblePlayerIds.map((id) => who(id).nickname), locale) : ''
 	);
 	const leaders = $derived(snap.next.kind === 'suddenDeath' ? snap.next.eligiblePlayerIds : []);
 </script>

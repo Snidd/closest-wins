@@ -7,7 +7,7 @@
 	import { useT } from '#lib/i18n/context.ts';
 	import { common } from '#lib/i18n/common.ts';
 	import { host } from '#lib/i18n/host.ts';
-	import { byJoinOrder, listNames, playerLookup, type HostPhase } from './types.ts';
+	import { listNames, playerLookup, type HostPhase } from './types.ts';
 
 	type Props = { snap: HostPhase<'reveal'>; locale: Locale; revealDone: boolean; progress: number };
 	let { snap, locale, revealDone, progress }: Props = $props();
@@ -19,7 +19,7 @@
 	const who = $derived(playerLookup(snap.players, snap.standings));
 	const place = $derived(localized(result.target, 'name', locale));
 	const fact = $derived(localized(result.target, 'fact', locale));
-	const winnerNames = $derived(byJoinOrder(result.winnerPlayerIds, snap.players).map((id) => who(id).nickname));
+	const winnerNames = $derived(result.winnerPlayerIds.map((id) => who(id).nickname));
 	const best = $derived(result.guesses.find((g) => g.isWinner));
 </script>
 

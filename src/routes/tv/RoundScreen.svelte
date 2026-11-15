@@ -20,7 +20,10 @@
 
 	const round = $derived(snap.round);
 	const sd = $derived(round.isSuddenDeath);
-	const duellists = $derived(sd ? snap.players.filter((p) => round.eligiblePlayerIds.includes(p.id)) : []);
+	// In the engine's order (standings order), like the host and the phones.
+	const duellists = $derived(
+		sd ? round.eligiblePlayerIds.map((id) => snap.players.find((p) => p.id === id)).filter((p) => p !== undefined) : []
+	);
 	const totalSec = $derived((round.endsAt - round.startedAt) / 1000);
 	const urgentBelow = $derived(Math.min(10, Math.max(3, Math.floor(totalSec / 3))));
 	const secondsLeft = $derived(Math.ceil(Math.max(0, round.endsAt - now) / 1000));

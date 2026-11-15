@@ -7,13 +7,13 @@
  */
 import { rm } from 'node:fs/promises';
 import path from 'node:path';
-import QRCode from 'qrcode';
 import { WEBGL_LAUNCH } from './helpers/env.ts';
 import { expect, test, type Browser, type Page } from '@playwright/test';
 import { Admin } from './helpers/admin.ts';
 import { closeDb, db, loadLocation, SEED } from './helpers/db.ts';
 import { GameDriver } from './helpers/driver.ts';
 import { makePhoto } from './helpers/photo.ts';
+import { expectedQrPath } from './helpers/qr.ts';
 
 test.use({
 	viewport: { width: 1920, height: 1080 },
@@ -53,26 +53,6 @@ async function pairedGame(browser: Browser, opts: Parameters<typeof GameDriver.c
 	await g.pairTv(tv.code);
 	await expect(tv.page.getByTestId('lobby-screen')).toBeVisible();
 	return { g, ...tv };
-}
-
-/** Same algorithm as `qrPath` in src/lib/ui/QrCode.svelte. */
-function expectedQrPath(value: string, quietZone: number) {
-	const { modules } = QRCode.create(value, { errorCorrectionLevel: 'M' });
-	const n = modules.size;
-	let d = '';
-	for (let y = 0; y < n; y++) {
-		let x = 0;
-		while (x < n) {
-			if (!modules.get(y, x)) {
-				x++;
-				continue;
-			}
-			const start = x;
-			while (x < n && modules.get(y, x)) x++;
-			d += `M${start + quietZone} ${y + quietZone}h${x - start}v1h${start - x}z`;
-		}
-	}
-	return d;
 }
 
 const stage = (page: Page) => page.getByTestId('reveal-screen');

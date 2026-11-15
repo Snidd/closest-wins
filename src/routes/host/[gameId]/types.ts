@@ -19,8 +19,3 @@ export function listNames(names: string[], locale: string): string {
 	}
 }
 
-/** Player ids in join order (stable, readable name lists such as "Alice and Bob"). */
-export function byJoinOrder(ids: string[], players: PlayerSummary[]): string[] {
-	const order = new Map(players.map((p, i) => [p.id, i]));
-	return [...ids].sort((a, b) => (order.get(a) ?? 1e9) - (order.get(b) ?? 1e9));
-}

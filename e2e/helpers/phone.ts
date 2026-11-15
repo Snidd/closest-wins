@@ -81,3 +81,151 @@ export async function panMap(page: Page, dx = -80, dy = 40) {
 
 /** GUESS_UPDATE_DEBOUNCE_MS (400) plus slack. */
 export const GUESS_DEBOUNCE_WAIT = 700;
+
+// --- Steering the guess map by touch -------------------------------------------------------------
+
+export interface MapView {
+	lat: number;
+	lng: number;
+	zoom: number;
+	touched: boolean;
+}
+
+/** Web Mercator y in world fractions (0 at the top). */
+function mercY(lat: number): number {
+	const phi = (Math.max(-85, Math.min(85, lat)) * Math.PI) / 180;
+	return (1 - Math.log(Math.tan(Math.PI / 4 + phi / 2)) / Math.PI) / 2;
+}
+
+/** The phone's own record of its cross (`RoundScreen` keeps it in sessionStorage per round). */
+async function readView(page: Page, key: string): Promise<MapView | null> {
+	return page.evaluate((k) => JSON.parse(sessionStorage.getItem(k) ?? 'null'), key);
+}
+
+async function waitForNewView(page: Page, key: string, before: string, timeoutMs = 2500): Promise<MapView | null> {
+	const end = Date.now() + timeoutMs;
+	for (;;) {
+		const v = await readView(page, key);
+		if (v && JSON.stringify(v) !== before) return v;
+		if (Date.now() > end) return v;
+		await page.waitForTimeout(100);
+	}
+}
+
+/**
+ * One finger stroke moving the map by (fx, fy) CSS pixels, held still before lifting (no
+ * inertia). MapLibre ignores very short drags (its click tolerance swallows the start of a
+ * gesture), so a short move is done as an overshoot and a way back.
+ */
+async function stroke(page: Page, fx: number, fy: number): Promise<void> {
+	const len = Math.hypot(fx, fy);
+	if (len < 40) {
+		const ux = len ? fx / len : 1;
+		const uy = len ? fy / len : 0;
+		await stroke(page, fx + ux * 60, fy + uy * 60);
+		await stroke(page, -ux * 60, -uy * 60);
+		return;
+	}
+	const vp = page.viewportSize()!;
+	const start = { x: vp.width / 2 - fx / 2, y: vp.height / 2 + 20 - fy / 2 };
+	const cdp = await page.context().newCDPSession(page);
+	const send = (type: 'touchStart' | 'touchMove' | 'touchEnd', points: Pt[]) =>
+		cdp.send('Input.dispatchTouchEvent', {
+			type,
+			touchPoints: points.map((p, i) => ({ x: p.x, y: p.y, id: i, radiusX: 2, radiusY: 2, force: 1 }))
+		});
+	await send('touchStart', [start]);
+	const steps = 10;
+	for (let s = 1; s <= steps; s++) {
+		await send('touchMove', [{ x: start.x + (fx * s) / steps, y: start.y + (fy * s) / steps }]);
+		await page.waitForTimeout(16);
+	}
+	await page.waitForTimeout(150);
+	await send('touchEnd', []);
+	await cdp.detach();
+}
+
+/** Two-finger pinch (spreading horizontally around the screen centre): zooms in by ~`factor`. */
+async function pinch(page: Page, factor = 3.5) {
+	const vp = page.viewportSize()!;
+	const c = { x: vp.width / 2, y: vp.height / 2 + 20 };
+	const from = 30;
+	const to = from * factor;
+	const cdp = await page.context().newCDPSession(page);
+	const send = (type: 'touchStart' | 'touchMove' | 'touchEnd', points: Pt[]) =>
+		cdp.send('Input.dispatchTouchEvent', {
+			type,
+			touchPoints: points.map((p, i) => ({ x: p.x, y: p.y, id: i, radiusX: 2, radiusY: 2, force: 1 }))
+		});
+	await send('touchStart', [
+		{ x: c.x - from, y: c.y },
+		{ x: c.x + from, y: c.y }
+	]);
+	const steps = 10;
+	for (let s = 1; s <= steps; s++) {
+		const d = from + ((to - from) * s) / steps;
+		await send('touchMove', [
+			{ x: c.x - d, y: c.y },
+			{ x: c.x + d, y: c.y }
+		]);
+		await page.waitForTimeout(16);
+	}
+	await page.waitForTimeout(150);
+	await send('touchEnd', []);
+	await cdp.detach();
+}
+
+/**
+ * Moves the round's guess map by touch, like a player would, until the centre cross is on
+ * `target` (within `tolerancePx` screen pixels), reading where the cross is from the phone's
+ * own state. At the world view a tall phone shows the whole height of the map, so it cannot
+ * pan north or south yet: first pan east/west, then pinch to zoom in, then fine-tune.
+ */
+export async function steerTo(
+	page: Page,
+	gameId: string,
+	roundIndex: number,
+	target: { lat: number; lng: number },
+	tolerancePx = 1.5
+): Promise<MapView> {
+	await mapReady(page);
+	const key = `cw:view:${gameId}:${roundIndex}`;
+	let view = await readView(page, key);
+	if (!view) {
+		await stroke(page, 40, 0);
+		view = await waitForNewView(page, key, 'null');
+	}
+	const delta = (v: MapView) => {
+		const world = 512 * 2 ** v.zoom;
+		const dLng = ((((target.lng - v.lng) % 360) + 540) % 360) - 180;
+		return { dx: (dLng / 360) * world, dy: (mercY(target.lat) - mercY(v.lat)) * world };
+	};
+	const log: string[] = [];
+	for (let i = 0; i < 30 && view; i++) {
+		const { dx, dy } = delta(view);
+		log.push(`z${view.zoom.toFixed(2)} ${view.lat.toFixed(3)},${view.lng.toFixed(3)} d=${dx.toFixed(1)},${dy.toFixed(1)}`);
+		let fx: number;
+		let fy: number;
+		if (view.zoom < 2) {
+			// Coarse east/west first, then zoom in around the cross.
+			if (Math.abs(dx) > 25) {
+				fx = Math.max(-160, Math.min(160, -dx));
+				fy = 0;
+			} else {
+				const before = JSON.stringify(view);
+				await pinch(page);
+				view = await waitForNewView(page, key, before);
+				continue;
+			}
+		} else {
+			if (Math.abs(dx) <= tolerancePx && Math.abs(dy) <= tolerancePx) return view;
+			// The map follows the finger: to move the cross east, the finger moves west.
+			fx = Math.max(-160, Math.min(160, -dx));
+			fy = Math.max(-170, Math.min(170, -dy));
+		}
+		const before = JSON.stringify(view);
+		await stroke(page, fx, fy);
+		view = await waitForNewView(page, key, before);
+	}
+	throw new Error(`could not steer the map to ${target.lat},${target.lng}: ${log.join(' | ')}`);
+}

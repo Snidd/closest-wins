@@ -40,8 +40,15 @@ export function isEligible(round: GameRound, p: Player): boolean {
 	return round.startedAt !== null && p.joinedAt.getTime() <= round.startedAt.getTime();
 }
 
+/**
+ * Ids of the players who may guess in `round`: join order in a regular round, the stored order
+ * (standings order of the tied leaders) in sudden death, so every screen lists them alike.
+ */
 export function eligibleIds(round: GameRound, players: readonly Player[]): string[] {
-	return players.filter((p) => isEligible(round, p)).map((p) => p.id);
+	const ids = players.filter((p) => isEligible(round, p)).map((p) => p.id);
+	if (!round.eligiblePlayerIds) return ids;
+	const allowed = new Set(ids);
+	return round.eligiblePlayerIds.filter((id) => allowed.has(id));
 }
 
 /** 1-based display number: regular rounds count from 1, sudden-death rounds count from 1 too. */

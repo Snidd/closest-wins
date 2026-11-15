@@ -172,7 +172,10 @@
 
 	// --- Others -----------------------------------------------------------------------------------
 	// Who may guess (players who joined mid-round and sudden-death spectators are not counted).
-	const participants = $derived(s.players.filter((p) => round.eligiblePlayerIds.includes(p.id)));
+	// In the engine's order, so names read the same on every screen (sudden death: standings order).
+	const participants = $derived(
+		round.eligiblePlayerIds.map((id) => s.players.find((p) => p.id === id)).filter((p) => p !== undefined)
+	);
 	const lockedIds = $derived(new Set(s.lockedPlayerIds));
 	const lockedCount = $derived(participants.filter((p) => lockedIds.has(p.id)).length);
 	const opponents = $derived(participants.filter((p) => p.id !== me.id));

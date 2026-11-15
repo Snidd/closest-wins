@@ -10,6 +10,11 @@ const PORT = 4173;
 const externalBaseUrl = process.env.E2E_BASE_URL;
 const baseURL = externalBaseUrl ?? `http://localhost:${PORT}`;
 
+const desktop = {
+	...devices['Desktop Chrome'],
+	launchOptions: existsSync('/usr/bin/chromium') ? { executablePath: '/usr/bin/chromium' } : {}
+};
+
 export default defineConfig({
 	webServer: externalBaseUrl
 		? undefined
@@ -37,10 +42,17 @@ export default defineConfig({
 	projects: [
 		{
 			name: 'chromium',
-			use: {
-				...devices['Desktop Chrome'],
-				launchOptions: existsSync('/usr/bin/chromium') ? { executablePath: '/usr/bin/chromium' } : {}
-			}
+			testIgnore: /full-game\.e2e\.ts$/,
+			use: { ...desktop }
+		},
+		{
+			// Whole games on five screens, alone after everything else: its sudden death picks a
+			// random library location and its restart scenario stops and starts a second server.
+			// Iterate on it alone with `pnpm test:e2e e2e/full-game.e2e.ts --no-deps`.
+			name: 'full-game',
+			testMatch: /full-game\.e2e\.ts$/,
+			dependencies: ['chromium'],
+			use: { ...desktop }
 		}
 	]
 });
