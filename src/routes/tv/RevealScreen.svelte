@@ -42,16 +42,24 @@
 	const stage = $derived<RevealStage>(timing?.stage ?? 'done');
 	let mapStage = $state<RevealStage | null>(null);
 
+	/** Moves the clock forward only: offset jitter between snapshots must not flip a stage back. */
+	const advance = () => {
+		const t = Date.now() + offsetMs;
+		if (t > untrack(() => now)) now = t;
+	};
+	// Keyed on the stage boundary, not on the `timing` object (new with every snapshot).
+	const nextAt = $derived(timing?.endsAt ?? Infinity);
 	$effect(() => {
-		const tm = timing;
-		if (!tm || tm.endsAt === Infinity) return;
-		const wait = tm.endsAt - (Date.now() + offsetMs) + 30;
-		const id = setTimeout(() => (now = Date.now() + offsetMs), Math.max(0, wait));
+		const endsAt = nextAt;
+		if (endsAt === Infinity) return;
+		const wait = endsAt - (Date.now() + untrack(() => offsetMs)) + 30;
+		const id = setTimeout(advance, Math.max(0, wait));
 		return () => clearTimeout(id);
 	});
 	$effect(() => {
 		// Offset updates (new snapshot) re-anchor the clock.
-		now = Date.now() + offsetMs;
+		void offsetMs;
+		advance();
 	});
 
 	const answerShown = $derived(stage === 'lines' || stage === 'done');

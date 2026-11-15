@@ -1,7 +1,8 @@
 <!--
   Reveal map (TV, also usable smaller on a phone). Runs the reveal choreography from server
   timestamps (see `reveal.ts`): pins → flying → lines → done. A screen that (re)mounts
-  mid-reveal lands in the right stage; `result.skipped` jumps to the end.
+  mid-reveal lands in the right stage; `result.skipped` jumps to the end. New snapshots of the
+  same reveal (new `result` object, new `offsetMs`) never restart it.
 
   ```svelte
   <RevealMap
@@ -344,25 +345,50 @@
 		}
 	}
 
+	/*
+	 * Every snapshot brings a new `result` object and a slightly different `offsetMs`, even while
+	 * the same reveal is running (a player connects, a TV reconnects…). Neither may restart the
+	 * choreography, or the camera would snap back mid-flight. The run is keyed on the reveal's
+	 * identity (round, start, mode); timing changes (`answerVisibleAt`, `skipped`) continue the
+	 * run from the stage it is in (a skip jumps to the end). The clock offset is read untracked,
+	 * always the latest, so the stage timing follows it without restarting anything.
+	 */
+	const revealKey = $derived(`${result.round.index}:${result.revealStartedAt}:${mode}`);
+	const timingKey = $derived(`${result.answerVisibleAt}:${result.skipped}`);
+	let latestOffset = untrack(() => offsetMs);
+	$effect.pre(() => {
+		latestOffset = offsetMs;
+	});
+	/** Stage the camera is in, for the run `currentRun` on map `currentMap`. */
+	let current: RevealStage | null = null;
+	let currentRun = '';
+	let currentMap: MaplibreMap | undefined;
+	/** Number of stage entries (tests: a new snapshot of the same reveal must not add any). */
+	let stageEntries = $state(0);
+
 	$effect(() => {
 		if (status !== 'ready' || !map) return;
-		// Re-run from the start whenever the result (round), mode or clock offset changes.
-		const r = result;
+		const run = revealKey;
+		void timingKey;
+		if (run !== currentRun || map !== currentMap) {
+			currentRun = run;
+			currentMap = map;
+			current = null;
+		}
 		const final = mode === 'final';
-		const offset = offsetMs;
 		let raf = 0;
 		let timer: ReturnType<typeof setTimeout> | undefined;
-		let current: RevealStage | null = null;
 
 		const step = () => {
-			const now = Date.now() + offset;
+			const now = Date.now() + latestOffset;
 			const tm: RevealTiming = final
 				? { stage: 'done', progress: 1, startsAt: now, endsAt: Infinity }
-				: revealTimingAt(r, now);
+				: revealTimingAt(untrack(() => result), now);
 			if (tm.stage !== current) {
 				untrack(() => enterStage(tm, current, now));
 				current = tm.stage;
 				stage = tm.stage;
+				untrack(() => stageEntries++);
 				untrack(() => onstage?.(tm.stage));
 				// Label content (distances) changes with the stage: re-measure after render.
 				void tick().then(() => {
@@ -388,6 +414,8 @@
 		void highlightPlayerId;
 		void pad;
 		if (status !== 'ready') return;
+		// Guesses changed after the lines were drawn (a player was removed): redraw them.
+		if (untrack(() => stage) === 'done') untrack(() => setLines(1));
 		void tick().then(() => {
 			measureLabels();
 			updatePositions();
@@ -481,6 +509,7 @@
 	bind:this={root}
 	data-status={status}
 	data-stage={stage}
+	data-stage-entries={stageEntries}
 >
 	<div class="canvas" bind:this={container} role="img" aria-label={t().revealLabel}></div>
 

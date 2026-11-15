@@ -224,6 +224,38 @@ test('skipping the reveal jumps straight to the result; nobody guessed reads cor
 	}
 });
 
+test('new snapshots during and after the reveal never restart the map choreography', async ({ browser }) => {
+	const { g, page, context } = await pairedGame(browser);
+	try {
+		await g.join('Anna');
+		await g.join('Bo');
+		await g.startRound();
+		await expect(page.getByTestId('round-screen')).toBeVisible();
+		await g.guess('Anna', 48.0, 2.0);
+		await g.guess('Bo', 40.4, -3.7);
+		await g.endRoundNow();
+		const map = page.locator('.reveal-map');
+		await expect(map).toHaveAttribute('data-status', 'ready', { timeout: 15_000 });
+		// Every presence change or join is a new snapshot (new result object, new clock offset).
+		g.disconnect('Bo');
+		await g.join('Late');
+		await g.connect('Bo');
+		await expect(map).toHaveAttribute('data-stage', 'done', { timeout: 15_000 });
+		// One entry per stage at most (pins, flying, lines, done), however many snapshots came.
+		const entries = Number(await map.getAttribute('data-stage-entries'));
+		expect(entries).toBeGreaterThanOrEqual(1);
+		expect(entries).toBeLessThanOrEqual(4);
+		await g.join('Later');
+		g.disconnect('Anna');
+		await page.waitForTimeout(1500);
+		await expect(map).toHaveAttribute('data-stage-entries', String(entries));
+		await expect(stage(page)).toHaveAttribute('data-reveal-stage', 'done');
+	} finally {
+		await context.close();
+		await g.cleanup();
+	}
+});
+
 test('a shared round win and the standings with movement and what comes next', async ({ browser }) => {
 	const { g, page, context } = await pairedGame(browser);
 	try {
