@@ -47,13 +47,23 @@
 		const t = Date.now() + offsetMs;
 		if (t > untrack(() => now)) now = t;
 	};
-	// Keyed on the stage boundary, not on the `timing` object (new with every snapshot).
+	// Keyed on the stage boundary, not on the `timing` object (new with every snapshot). Checks
+	// against the latest offset when it fires and waits again if the boundary is not reached yet;
+	// once it is, the clock is moved to at least the boundary, so the stage always advances.
 	const nextAt = $derived(timing?.endsAt ?? Infinity);
 	$effect(() => {
 		const endsAt = nextAt;
 		if (endsAt === Infinity) return;
-		const wait = endsAt - (Date.now() + untrack(() => offsetMs)) + 30;
-		const id = setTimeout(advance, Math.max(0, wait));
+		let id: ReturnType<typeof setTimeout> | undefined;
+		const check = () => {
+			const t = Date.now() + untrack(() => offsetMs);
+			if (t < endsAt) {
+				id = setTimeout(check, endsAt - t + 30);
+				return;
+			}
+			now = Math.max(untrack(() => now), t);
+		};
+		check();
 		return () => clearTimeout(id);
 	});
 	$effect(() => {
