@@ -42,7 +42,7 @@ import {
 	ROUND_END_GRACE_MS,
 	type EngineEvent
 } from './engine.ts';
-import { buildHostSnapshot, buildPlayerStateForGame, buildTvState } from './views.ts';
+import { buildHostSnapshot, buildPlayerStateForGame, buildTvState, buildTvStateFor } from './views.ts';
 import { getGameHistory, listGames } from './history.ts';
 import { enterPresence } from './presence.ts';
 import { subscribeGame } from './events.ts';
@@ -704,6 +704,71 @@ describe('snapshots during transitions', () => {
 			await expect(buildHostSnapshot(gameId)).rejects.toThrow('connection reset');
 			// Same game version: the next stream builds afresh instead of getting the failure.
 			expect((await buildHostSnapshot(gameId)).phase).toBe('lobby');
+		} finally {
+			unsubscribe();
+		}
+	});
+
+	it('player and TV snapshots of one game version need no queries beyond the shared model', async () => {
+		const { gameId, joinCode } = await newGame(2);
+		const a = await join(joinCode, 'Ada');
+		const b = await join(joinCode, 'Ben');
+		const late = await join(joinCode, 'Cy');
+		const reg = await registerTv(null);
+		fx.tvIds.push(reg.tvId);
+		const pairing = await buildTvState(reg.token);
+		if (pairing.status !== 'pairing') throw new Error('expected pairing');
+		await pairTv(gameId, pairing.pairingCode);
+		await startRound(gameId);
+		const aPos = { lat: 12.345678, lng: 23.456789 };
+		await place(a, 0, aPos);
+		await place(b, 0, { lat: -5.5, lng: 7.25 }, { lock: true });
+		await kickPlayer(gameId, late.playerId);
+		const tvRow = (await resolveTv(reg.token))!;
+
+		const unsubscribe = subscribeGame(gameId, () => {}); // streams are open: the model is shared
+		try {
+			await buildHostSnapshot(gameId); // builds the model for this version
+			const select = vi.spyOn(db, 'select');
+			const tx = vi.spyOn(db, 'transaction');
+			const [pa, pb, pl, stranger] = await Promise.all([
+				buildPlayerStateForGame(gameId, a.token),
+				buildPlayerStateForGame(gameId, b.token),
+				buildPlayerStateForGame(gameId, late.token),
+				buildPlayerStateForGame(gameId, 'x'.repeat(43))
+			]);
+			const tv = await buildTvStateFor(tvRow);
+			expect(select).not.toHaveBeenCalled();
+			expect(tx).not.toHaveBeenCalled();
+
+			if (pa.status !== 'playing' || pa.phase !== 'round') throw new Error('expected round');
+			if (pb.status !== 'playing' || pb.phase !== 'round') throw new Error('expected round');
+			expect(pa.me.id).toBe(a.playerId);
+			expect(pa.myGuess).toMatchObject({ ...aPos, touched: true, lockedAt: null });
+			expect(pb.myGuess).toMatchObject({ lat: -5.5, lng: 7.25, lockedAt: fx.clock.now });
+			expect(pb.lockedPlayerIds).toEqual([b.playerId]);
+			expect(JSON.stringify(pb)).not.toContain('12.345678'); // never another player's cross
+			expect(pl).toEqual({ role: 'player', status: 'kicked' });
+			expect(stranger).toEqual({ role: 'player', status: 'notJoined', joinable: true });
+			expect(tv.status === 'paired' && tv.phase).toBe('round');
+		} finally {
+			unsubscribe();
+		}
+	});
+
+	it('a phone that reconnects after moving its cross gets the new position', async () => {
+		const { gameId, joinCode } = await newGame(1);
+		const a = await join(joinCode, 'Mover');
+		await join(joinCode, 'Other');
+		await startRound(gameId);
+		await place(a, 0, { lat: 1, lng: 1 });
+		const unsubscribe = subscribeGame(gameId, () => {});
+		try {
+			const before = await buildPlayerStateForGame(gameId, a.token);
+			expect(before.status === 'playing' && before.phase === 'round' && before.myGuess).toMatchObject({ lat: 1 });
+			await place(a, 0, { lat: 2, lng: 3 }); // no notification: nobody else may see it
+			const after = await buildPlayerStateForGame(gameId, a.token);
+			expect(after.status === 'playing' && after.phase === 'round' && after.myGuess).toMatchObject({ lat: 2, lng: 3 });
 		} finally {
 			unsubscribe();
 		}

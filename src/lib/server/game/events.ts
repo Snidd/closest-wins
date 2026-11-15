@@ -54,6 +54,16 @@ export function notifyGame(gameId: string): void {
 }
 
 /**
+ * Marks the game's shared snapshot model stale without waking any stream: for state that is in
+ * no live snapshot but is read when a stream (re)opens (a player's own cross position, which
+ * restores the map after a refresh). The next snapshot built, by a new stream or after the next
+ * `notifyGame`, reads it fresh.
+ */
+export function invalidateGame(gameId: string): void {
+	versions.set(gameId, (versions.get(gameId) ?? 0) + 1);
+}
+
+/**
  * Monotonic per-channel change counter for the process lifetime (snapshot caching: equal
  * versions mean nothing was notified in between). One number per channel ever notified.
  */

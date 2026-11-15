@@ -51,7 +51,7 @@ import {
 import { normalizeLatLng } from '#lib/geo.ts';
 import { nextPlayerColor } from '#lib/ui/colors.ts';
 import { hashToken, isPlausibleToken, mintToken } from '#lib/server/auth/crypto.ts';
-import { notifyGame } from './events.ts';
+import { invalidateGame, notifyGame } from './events.ts';
 import { connectedPlayerIds, onPresenceChange } from './presence.ts';
 import { currentWinners, pickRandom, pickRoundLocations, scoreRound } from './rules.ts';
 import { deps, type TimerHandle } from './deps.ts';
@@ -881,7 +881,9 @@ export async function updateGuess(p: Player, input: UpdateGuessInput): Promise<v
 				setWhere: isNull(guess.lockedAt)
 			});
 	});
-	// No notification: positions are not part of anyone's snapshot until reveal.
+	// No notification: positions are not part of anyone's live snapshot until reveal. But the
+	// cached model holds each player's own cross for a phone that reconnects: mark it stale.
+	invalidateGame(input.gameId);
 }
 
 /** Final position; the guess cannot change afterwards. */
@@ -934,10 +936,11 @@ async function tvIsFree(tv: TvScreen): Promise<boolean> {
 
 /**
  * Makes sure a free TV has a valid pairing code, rotating an expired one. Returns the current
- * row. Paired TVs (game not finished) are returned unchanged.
+ * row. Paired TVs (game not finished) are returned unchanged. `free: true` skips the lookup when
+ * the caller already knows the TV is free.
  */
-export async function ensurePairingCode(tv: TvScreen): Promise<TvScreen> {
-	if (!(await tvIsFree(tv))) return tv;
+export async function ensurePairingCode(tv: TvScreen, opts: { free?: boolean } = {}): Promise<TvScreen> {
+	if (!opts.free && !(await tvIsFree(tv))) return tv;
 	const now = deps.now();
 	if (tv.pairingCode && tv.codeExpiresAt && tv.codeExpiresAt.getTime() > now) return tv;
 	for (let attempt = 0; attempt < 50; attempt++) {

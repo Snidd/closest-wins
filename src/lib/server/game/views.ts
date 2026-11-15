@@ -8,8 +8,9 @@
  * (only the caller's own cross and the list of who has locked in).
  *
  * The role-independent part of a game's state is built once per change (`gameVersion`) and
- * shared by every stream of that game; the per-player parts (own guess, own result) are added
- * per snapshot.
+ * shared by every stream of that game; the per-player parts (who the caller is, own guess, own
+ * result) are picked from it per snapshot without further queries. The model holds every
+ * player's cross of the running round server-side; a snapshot only ever takes the caller's own.
  */
 import { and, desc, eq, isNotNull } from 'drizzle-orm';
 import { ORIGIN } from '$app/env/private';
@@ -54,13 +55,20 @@ import {
 	standingsOf
 } from './state.ts';
 import { ensurePairingCode, findGameByCode, findPlayerByToken, GameError, resolveTv } from './engine.ts';
+import { hashToken, isPlausibleToken } from '#lib/server/auth/crypto.ts';
 
 // --- Shared game model -------------------------------------------------------------------------
 
 interface GameModel {
 	game: Game;
 	info: GameInfo;
+	/** All players, kicked ones included (resolves a phone's token without another query). */
 	players: Player[];
+	/**
+	 * Every player's own cross in the running round, by player id. SERVER-SIDE ONLY: a player's
+	 * snapshot takes exactly its own entry (`myGuess`); never spread this into a snapshot.
+	 */
+	guessesByPlayer: Map<string, OwnGuess>;
 	summaries: PlayerSummary[];
 	activeCount: number;
 	roundsPlayed: number;
@@ -182,6 +190,7 @@ async function loadModelIn(ex: Executor, gameId: string): Promise<GameModel | nu
 	const withConnected = (rows: Omit<StandingRow, 'connected'>[]): StandingRow[] =>
 		rows.map((r) => ({ ...r, connected: connected.has(r.playerId) }));
 
+	const guessesByPlayer = new Map<string, OwnGuess>();
 	let phase: PhaseState;
 	switch (g.phase) {
 		case 'lobby':
@@ -191,13 +200,28 @@ async function loadModelIn(ex: Executor, gameId: string): Promise<GameModel | nu
 			if (!current || !current.startedAt || !current.endsAt || current.endedAt) {
 				throw new Error(`Game ${g.id} is in 'round' without a running round`);
 			}
-			const [clueMap, locked] = await Promise.all([
+			const [clueMap, rows] = await Promise.all([
 				clues([current.locationId], ex),
 				ex
-					.select({ playerId: guess.playerId })
+					.select({
+						playerId: guess.playerId,
+						lat: guess.lat,
+						lng: guess.lng,
+						touched: guess.touched,
+						lockedAt: guess.lockedAt
+					})
 					.from(guess)
-					.where(and(eq(guess.roundId, current.id), isNotNull(guess.lockedAt)))
+					.where(eq(guess.roundId, current.id))
 			]);
+			for (const r of rows) {
+				guessesByPlayer.set(r.playerId, {
+					lat: r.lat,
+					lng: r.lng,
+					touched: r.touched,
+					lockedAt: r.lockedAt?.getTime() ?? null
+				});
+			}
+			const locked = rows.filter((r) => r.lockedAt !== null);
 			const activeIds = new Set(active.map((p) => p.id));
 			const round: ActiveRound = {
 				index: current.index,
@@ -250,6 +274,7 @@ async function loadModelIn(ex: Executor, gameId: string): Promise<GameModel | nu
 		game: g,
 		info,
 		players,
+		guessesByPlayer,
 		summaries,
 		activeCount: active.length,
 		roundsPlayed: regularRoundsStarted(rounds),
@@ -336,8 +361,11 @@ export async function buildPlayerStateForGame(
 	gameId: string,
 	token: string | null
 ): Promise<PlayerStateValue> {
-	const [m, me] = await Promise.all([getModel(gameId), findPlayerByToken(gameId, token)]);
+	const m = await getModel(gameId);
 	if (!m) return NO_GAME;
+	// The model holds every player (kicked included) with its token hash: no query per snapshot.
+	const tokenHash = isPlausibleToken(token) ? hashToken(token) : null;
+	const me = tokenHash ? (m.players.find((p) => p.tokenHash === tokenHash) ?? null) : null;
 	if (!me) {
 		if (m.game.phase === 'finished') return NO_GAME;
 		return { role: 'player', status: 'notJoined', joinable: m.activeCount < MAX_PLAYERS };
@@ -357,22 +385,8 @@ export async function buildPlayerStateForGame(
 		case 'round': {
 			const round = m.current!;
 			const canGuess = isEligible(round, me);
-			let myGuess: OwnGuess | null = null;
-			if (canGuess) {
-				// The caller's own cross only.
-				const [own] = await db
-					.select({ lat: guess.lat, lng: guess.lng, touched: guess.touched, lockedAt: guess.lockedAt })
-					.from(guess)
-					.where(and(eq(guess.roundId, round.id), eq(guess.playerId, me.id)));
-				if (own) {
-					myGuess = {
-						lat: own.lat,
-						lng: own.lng,
-						touched: own.touched,
-						lockedAt: own.lockedAt?.getTime() ?? null
-					};
-				}
-			}
+			// The caller's own cross only.
+			const myGuess = canGuess ? (m.guessesByPlayer.get(me.id) ?? null) : null;
 			return { ...base, ...phase, canGuess, myGuess };
 		}
 		case 'reveal':
@@ -401,8 +415,10 @@ export async function buildTvState(token: string | null): Promise<TvStateValue> 
 
 /** Snapshot for a known TV row; rotates an expired pairing code. */
 export async function buildTvStateFor(row: TvScreen): Promise<TvStateValue> {
-	const tv = await ensurePairingCode(row);
-	const m = tv.gameId ? await getModel(tv.gameId) : null;
+	const m = row.gameId ? await getModel(row.gameId) : null;
+	// Paired with a running game: nothing to rotate (and no query beyond the shared model). Free
+	// (never paired, game gone or finished): make sure it shows a valid pairing code.
+	const tv = m && m.game.phase !== 'finished' ? row : await ensurePairingCode(row, { free: true });
 	if (m) {
 		const snapshot: TvSnapshot = {
 			serverNow: deps.now(),
