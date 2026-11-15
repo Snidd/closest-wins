@@ -38,6 +38,7 @@ import {
 import { buildHostSnapshot, buildPlayerStateForGame, buildTvState } from './views.ts';
 import { getGameHistory, listGames } from './history.ts';
 import { enterPresence } from './presence.ts';
+import { subscribeGame } from './events.ts';
 import { haversineKm } from './rules.ts';
 import { addPhoto, createFixture, type Fixture, type FixtureLocation } from './testkit.ts';
 
@@ -604,6 +605,45 @@ describe('concurrency', () => {
 		expect(events.filter((e) => e.type === 'roundStarted')).toHaveLength(2);
 		await expectGameError(startRound(gameId), 'WRONG_PHASE');
 	});
+});
+
+describe('snapshots during transitions', () => {
+	it('never see a torn state while a round ends', async () => {
+		const { gameId, joinCode } = await newGame(3);
+		const a = await join(joinCode, 'Reader');
+		for (let i = 0; i < 3; i++) {
+			await startRoundOrNext(gameId, i);
+			await place(a, i, near(fx.locations[i]!, 1));
+			const reads = () => Array.from({ length: 12 }, () => buildHostSnapshot(gameId));
+			const results = await Promise.allSettled([...reads(), endRoundNow(gameId), ...reads()]);
+			const failed = results.filter((r) => r.status === 'rejected');
+			expect(failed.map((r) => String((r as PromiseRejectedResult).reason))).toEqual([]);
+			for (const r of results.slice(0, 12).concat(results.slice(13))) {
+				const s = (r as PromiseFulfilledResult<HostSnapshot>).value;
+				expect(['round', 'reveal']).toContain(s.phase);
+			}
+		}
+	});
+
+	it('a failed model build is not cached for the other streams of the game', async () => {
+		const { gameId, joinCode } = await newGame(1);
+		await join(joinCode, 'Streamer');
+		const unsubscribe = subscribeGame(gameId, () => {}); // as if a stream were open
+		try {
+			vi.spyOn(db, 'transaction').mockRejectedValueOnce(new Error('connection reset'));
+			await expect(buildHostSnapshot(gameId)).rejects.toThrow('connection reset');
+			// Same game version: the next stream builds afresh instead of getting the failure.
+			expect((await buildHostSnapshot(gameId)).phase).toBe('lobby');
+		} finally {
+			unsubscribe();
+		}
+	});
+
+	async function startRoundOrNext(gameId: string, i: number) {
+		if (i === 0) return startRound(gameId);
+		await nextRound(gameId);
+		await nextRound(gameId);
+	}
 });
 
 describe('restart recovery', () => {

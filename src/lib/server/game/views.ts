@@ -13,12 +13,13 @@
  */
 import { and, desc, eq, isNotNull } from 'drizzle-orm';
 import { ORIGIN } from '$app/env/private';
-import { db } from '#lib/server/db/index.ts';
+import { db, type Executor } from '#lib/server/db/index.ts';
 import { game, guess, tvScreen, type Game, type GameRound, type Player, type TvScreen } from '#lib/server/db/schema.ts';
 import {
 	MAX_PLAYERS,
 	REVEAL_SUSPENSE_MS,
 	type ActiveRound,
+	type BilingualName,
 	type GameInfo,
 	type HostSnapshot,
 	type HostTvStatus,
@@ -80,15 +81,16 @@ function competitionRanks(sortedValues: readonly number[]): number[] {
 
 /** Only for a round that has ended (reads the answer). */
 async function buildResult(
+	ex: Executor,
 	g: Game,
 	round: GameRound,
 	rounds: readonly GameRound[],
 	players: readonly Player[]
 ): Promise<RoundResult> {
 	const [targetMap, clueMap, rows] = await Promise.all([
-		targets([round.locationId]),
-		revealedClues([round.locationId]),
-		db
+		targets([round.locationId], ex),
+		revealedClues([round.locationId], ex),
+		ex
 			.select()
 			.from(guess)
 			.where(and(eq(guess.roundId, round.id), isNotNull(guess.distanceKm)))
@@ -137,14 +139,26 @@ async function buildResult(
 	};
 }
 
-async function loadModel(gameId: string): Promise<GameModel | null> {
-	const [g] = await db.select().from(game).where(eq(game.id, gameId));
+/**
+ * Reads the game in one snapshot: a read-only REPEATABLE READ transaction, so the game row,
+ * its rounds, guesses and players all come from the same committed state (separate queries
+ * could see the game still in `round` but its round already ended by a concurrent transition).
+ */
+function loadModel(gameId: string): Promise<GameModel | null> {
+	return db.transaction((tx) => loadModelIn(tx, gameId), {
+		isolationLevel: 'repeatable read',
+		accessMode: 'read only'
+	});
+}
+
+async function loadModelIn(ex: Executor, gameId: string): Promise<GameModel | null> {
+	const [g] = await ex.select().from(game).where(eq(game.id, gameId));
 	if (!g) return null;
 	const [players, rounds, tvs, names] = await Promise.all([
-		loadPlayers(db, gameId),
-		loadRounds(db, gameId),
-		db.select({ id: tvScreen.id }).from(tvScreen).where(eq(tvScreen.gameId, gameId)),
-		g.playlistId ? playlistNames([g.playlistId]) : Promise.resolve(new Map())
+		loadPlayers(ex, gameId),
+		loadRounds(ex, gameId),
+		ex.select({ id: tvScreen.id }).from(tvScreen).where(eq(tvScreen.gameId, gameId)),
+		g.playlistId ? playlistNames([g.playlistId], ex) : Promise.resolve(new Map<string, BilingualName>())
 	]);
 	const connected = connectedPlayerIds(gameId);
 	const active = activePlayers(players);
@@ -178,8 +192,8 @@ async function loadModel(gameId: string): Promise<GameModel | null> {
 				throw new Error(`Game ${g.id} is in 'round' without a running round`);
 			}
 			const [clueMap, locked] = await Promise.all([
-				clues([current.locationId]),
-				db
+				clues([current.locationId], ex),
+				ex
 					.select({ playerId: guess.playerId })
 					.from(guess)
 					.where(and(eq(guess.roundId, current.id), isNotNull(guess.lockedAt)))
@@ -206,8 +220,8 @@ async function loadModel(gameId: string): Promise<GameModel | null> {
 			if (!current || !current.endedAt) {
 				throw new Error(`Game ${g.id} is in '${g.phase}' without an ended round`);
 			}
-			const standingRows = standingsOf(players, await roundOutcomes(db, rounds));
-			const result = await buildResult(g, current, rounds, players);
+			const standingRows = standingsOf(players, await roundOutcomes(ex, rounds));
+			const result = await buildResult(ex, g, current, rounds, players);
 			phase =
 				g.phase === 'reveal'
 					? { phase: 'reveal', result, standings: withConnected(standingRows) }
@@ -220,7 +234,7 @@ async function loadModel(gameId: string): Promise<GameModel | null> {
 			break;
 		}
 		case 'finished': {
-			const standingRows = standingsOf(players, await roundOutcomes(db, rounds));
+			const standingRows = standingsOf(players, await roundOutcomes(ex, rounds));
 			const activeIds = new Set(active.map((p) => p.id));
 			phase = {
 				phase: 'finished',
