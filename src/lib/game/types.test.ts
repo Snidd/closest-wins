@@ -7,7 +7,9 @@ import {
 	LockInSchema,
 	NicknameSchema,
 	PairTvSchema,
+	photoSrcset,
 	photoUrl,
+	photoVariantWidth,
 	type PlayerSnapshot,
 	type RoundState,
 	type TvSnapshot
@@ -66,5 +68,20 @@ describe('snapshot types', () => {
 		// @ts-expect-error -- `result` is `never` in the round phase
 		const leaked: RoundState = { ...round, result: { target: { lat: 1, lng: 2 } } };
 		expect(leaked).toBeDefined();
+	});
+});
+
+describe('photoSrcset', () => {
+	const urls = { sm: '/s', md: '/m', lg: '/l' };
+	it('declares the real widths of the stored variants', () => {
+		// A 1600×1000 upload: lg is not enlarged to 1920.
+		expect(photoSrcset({ width: 1600, height: 1000, urls })).toBe('/s 480w, /m 1024w, /l 1600w');
+		// Portrait 1280×1920: the longest edge is the height.
+		expect(photoSrcset({ width: 1280, height: 1920, urls })).toBe('/s 320w, /m 683w, /l 1280w');
+		expect(photoVariantWidth({ width: 1920, height: 1200 }, 'md')).toBe(1024);
+	});
+	it('lists identical small variants once', () => {
+		expect(photoSrcset({ width: 400, height: 300, urls })).toBe('/s 400w');
+		expect(photoSrcset({ width: 800, height: 600, urls }, ['md', 'lg'])).toBe('/m 800w');
 	});
 });

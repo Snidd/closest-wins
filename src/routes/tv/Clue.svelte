@@ -5,7 +5,7 @@
   a missing file shows a quiet placeholder instead.
 -->
 <script lang="ts">
-	import type { ClueView } from '#lib/game/types.ts';
+	import { photoSrcset, type ClueView } from '#lib/game/types.ts';
 	import { useLocale, useT } from '#lib/i18n/context.ts';
 	import { tv as tvDict } from '#lib/i18n/tv.ts';
 	import { localized } from '#lib/i18n/localized.ts';
@@ -58,7 +58,7 @@
 				bind:this={img}
 				class="pic"
 				src={photo.urls.md}
-				srcset="{photo.urls.sm} 480w, {photo.urls.md} 1024w, {photo.urls.lg} 1920w"
+				srcset={photoSrcset(photo)}
 				sizes={kind === 'both' ? '65vw' : '100vw'}
 				width={photo.width}
 				height={photo.height}

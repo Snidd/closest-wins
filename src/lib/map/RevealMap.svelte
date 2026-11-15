@@ -161,7 +161,24 @@
 		return hl(a) - hl(b) || a.order - b.order;
 	}
 
+	/**
+	 * Map `move` fires many times per frame during camera animations, and placing ~40 labels is
+	 * not free (software rendering on a TV stick): coalesce to one update per animation frame.
+	 */
+	let frame = 0;
+	function schedulePositions() {
+		if (frame) return;
+		frame = requestAnimationFrame(() => {
+			frame = 0;
+			updatePositions();
+		});
+	}
+
 	function updatePositions() {
+		if (frame) {
+			cancelAnimationFrame(frame);
+			frame = 0;
+		}
 		if (!map) return;
 		const centerLng = map.getCenter().lng;
 		const next: Record<string, { x: number; y: number }> = {};
@@ -408,10 +425,10 @@
 					failure = 'tiles';
 					status = 'error';
 				});
-				m.on('move', updatePositions);
+				m.on('move', schedulePositions);
 				let refit: ReturnType<typeof setTimeout> | undefined;
 				m.on('resize', () => {
-					updatePositions();
+					schedulePositions();
 					// Keep the answer framed when the screen changes size (TV / rotation).
 					clearTimeout(refit);
 					refit = setTimeout(() => {
@@ -435,6 +452,8 @@
 
 		return () => {
 			cancelled = true;
+			cancelAnimationFrame(frame);
+			frame = 0;
 			instance?.remove();
 			map = undefined;
 		};

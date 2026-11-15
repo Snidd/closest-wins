@@ -55,6 +55,37 @@ export function photoUrl(fileKey: string, size: PhotoSize): string {
 	return `/media/${fileKey}/${size}.webp`;
 }
 
+/**
+ * Pixel width of a stored variant, from the largest variant's dimensions. Variants are resized
+ * to a longest edge of `PHOTO_SIZES[size]` without enlarging, so a 1600×1000 upload has
+ * `lg` = 1600 wide and a portrait's `sm` is narrower than 480.
+ */
+export function photoVariantWidth(photo: { width: number; height: number }, size: PhotoSize): number {
+	const longest = Math.max(photo.width, photo.height);
+	if (longest <= 0) return PHOTO_SIZES[size];
+	return Math.max(1, Math.round((photo.width * Math.min(PHOTO_SIZES[size], longest)) / longest));
+}
+
+/**
+ * `srcset` for a photo with the variants' real widths. Declaring the nominal sizes instead
+ * (`1920w` for a 1600 px file) makes the browser under-report and upscale the image.
+ */
+export function photoSrcset(
+	photo: { width: number; height: number; urls: Record<PhotoSize, string> },
+	sizes: readonly PhotoSize[] = ['sm', 'md', 'lg']
+): string {
+	const seen = new Set<number>();
+	const parts: string[] = [];
+	for (const size of sizes) {
+		const w = photoVariantWidth(photo, size);
+		// Small originals make several variants identical; list each width once.
+		if (seen.has(w)) continue;
+		seen.add(w);
+		parts.push(`${photo.urls[size]} ${w}w`);
+	}
+	return parts.join(', ');
+}
+
 // ---------------------------------------------------------------------------------------------
 // Building blocks
 // ---------------------------------------------------------------------------------------------

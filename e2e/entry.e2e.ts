@@ -2,17 +2,13 @@
  * Entry pages: landing (join code input), /join/[code] and /login.
  *
  * Some join tests need a real game. They insert a lobby game straight into Postgres (random
- * code, deleted afterwards) and skip themselves at runtime while the engine is still a stub:
- * - `findGameByCode` not implemented → the join page reports `data-state="unchecked"`;
- * - `joinGame` not implemented       → the remote form answers 501.
+ * code, deleted afterwards).
  */
 import { randomBytes } from 'node:crypto';
 import postgres from 'postgres';
 import { expect, test, type Browser, type Page } from '@playwright/test';
 
 const ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ';
-const ENGINE_LOOKUP_STUB = 'engine findGameByCode() is still a stub (join page state "unchecked")';
-const JOIN_STUB = 'engine joinGame remote form is still a stub (responds 501)';
 
 // --- Test games in the database ------------------------------------------------------------------
 
@@ -172,7 +168,6 @@ test.describe('join page', () => {
 		await game.cleanup();
 		await page.goto(`/join/${game.code}`);
 		const state = await page.locator('main').getAttribute('data-state');
-		test.skip(state === 'unchecked', ENGINE_LOOKUP_STUB);
 		expect(state).toBe('notFound');
 		await expect(page.getByRole('heading', { name: 'No game with that code' })).toBeVisible();
 		await expect(page.getByText(game.code)).toBeVisible();
@@ -240,8 +235,7 @@ test.describe('join page', () => {
 			}));
 			await db()`insert into player ${db()(players)}`;
 			await page.goto(`/join/${game.code}`);
-			const state = await page.locator('main').getAttribute('data-state');
-			test.skip(state === 'unchecked', ENGINE_LOOKUP_STUB);
+			await expect(page.locator('main')).toHaveAttribute('data-state', 'full');
 			await expect(page.getByRole('heading', { name: 'This game is full' })).toBeVisible();
 			await expect(page.locator('#nickname')).toHaveCount(0);
 		} finally {
@@ -258,12 +252,7 @@ test.describe('join page', () => {
 			await page.goto(`/join/${game.code}`);
 			await hydrated(page);
 			await page.locator('#nickname').fill('Alice');
-			const [response] = await Promise.all([
-				page.waitForResponse((r) => r.url().includes('/remote/') && r.request().method() === 'POST'),
-				page.getByRole('button', { name: "Let's play" }).click()
-			]);
-			const body = await response.text().catch(() => '');
-			test.skip(response.status() === 501 || body.includes('Not implemented'), JOIN_STUB);
+			await page.getByRole('button', { name: "Let's play" }).click();
 
 			await expect(page).toHaveURL(new RegExp(`/play/${game.code}$`));
 			const cookie = (await first.context.cookies()).find((c) => c.name.startsWith('cw_p_'));

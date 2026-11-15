@@ -15,6 +15,7 @@ import {
 	endRoundNow,
 	GameError,
 	initEngine,
+	isGameFull,
 	joinGame,
 	kickPlayer,
 	lockIn,
@@ -493,13 +494,16 @@ describe('joining', () => {
 	it(`caps the game at ${MAX_PLAYERS} players and refuses joins after the game finished`, async () => {
 		const { gameId, joinCode } = await newGame(1);
 		const first = await join(joinCode, 'P0', { connected: false });
+		expect(await isGameFull(gameId)).toBe(false);
 		for (let i = 1; i < MAX_PLAYERS; i++) await joinGame({ code: joinCode, nickname: `P${i}` }, null);
+		expect(await isGameFull(gameId)).toBe(true);
 		await expectGameError(joinGame({ code: joinCode, nickname: 'One too many' }, null), 'GAME_FULL');
 		const colours = await db.select({ c: player.color }).from(player).where(eq(player.gameId, gameId));
 		expect(new Set(colours.map((r) => r.c)).size).toBe(MAX_PLAYERS);
 		expect(await buildPlayerStateForGame(gameId, null)).toEqual({ role: 'player', status: 'notJoined', joinable: false });
 		// Kicking frees a slot.
 		await kickPlayer(gameId, first.playerId);
+		expect(await isGameFull(gameId)).toBe(false);
 		await joinGame({ code: joinCode, nickname: 'Replacement' }, null);
 		await endGame(gameId);
 		await expectGameError(joinGame({ code: joinCode, nickname: 'After' }, null), 'NOT_FOUND');

@@ -142,14 +142,14 @@
 			<img src={mark} alt="" width="28" height="28" />
 			<span>{t().appName}</span>
 		</a>
-		{#if data.state === 'open' || data.state === 'unchecked'}
+		{#if data.state === 'open'}
 			<span class="code-chip" data-testid="join-code-chip">
 				{t().joinCode} <strong class="code u-code">{data.code}</strong>
 			</span>
 		{/if}
 	</header>
 
-	{#if data.state === 'open' || data.state === 'unchecked'}
+	{#if data.state === 'open'}
 		<form {...enhanced} class="form" novalidate>
 			<h1>{t().joinHeading}</h1>
 

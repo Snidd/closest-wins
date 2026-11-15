@@ -4,7 +4,7 @@
 -->
 <script lang="ts">
 	import { fade } from 'svelte/transition';
-	import type { PhotoView } from '#lib/game/types.ts';
+	import { photoSrcset, type PhotoView } from '#lib/game/types.ts';
 	import { useT } from '#lib/i18n/context.ts';
 	import { player } from '#lib/i18n/player.ts';
 
@@ -184,7 +184,7 @@
 		<img
 			bind:this={img}
 			src={photo.urls.lg}
-			srcset="{photo.urls.md} {1024}w, {photo.urls.lg} {1920}w"
+			srcset={photoSrcset(photo, ['md', 'lg'])}
 			sizes="100vw"
 			width={photo.width}
 			height={photo.height}

@@ -16,7 +16,7 @@
  * - Expected failures throw `GameError`; remote functions map them to HTTP errors.
  */
 import { randomInt } from 'node:crypto';
-import { and, eq, gt, inArray, isNotNull, isNull, lte, ne, or, sql } from 'drizzle-orm';
+import { and, count, eq, gt, inArray, isNotNull, isNull, lte, ne, or, sql } from 'drizzle-orm';
 import { db, type Transaction } from '#lib/server/db/index.ts';
 import {
 	game,
@@ -295,6 +295,21 @@ export async function findPlayerByToken(gameId: string, token: string | null): P
 export async function resolvePlayer(gameId: string, token: string | null): Promise<Player | null> {
 	const p = await findPlayerByToken(gameId, token);
 	return p && !p.kicked ? p : null;
+}
+
+/** Non-kicked players in the game (what `MAX_PLAYERS` limits). */
+export async function activePlayerCount(gameId: string): Promise<number> {
+	if (!isUuid(gameId)) return 0;
+	const [row] = await db
+		.select({ n: count() })
+		.from(player)
+		.where(and(eq(player.gameId, gameId), eq(player.kicked, false)));
+	return row?.n ?? 0;
+}
+
+/** May another player join? (The `joinGame` transaction re-checks under the game lock.) */
+export async function isGameFull(gameId: string): Promise<boolean> {
+	return (await activePlayerCount(gameId)) >= MAX_PLAYERS;
 }
 
 /** The TV owning `token`, or null. */
