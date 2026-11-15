@@ -57,7 +57,7 @@ import { hostStream, playerStream, tvStream } from '#lib/server/game/streams.ts'
 import * as history from '#lib/server/game/history.ts';
 import { translate } from '#lib/i18n/dict.ts';
 import { common } from '#lib/i18n/common.ts';
-import type { Locale } from '#lib/i18n/locale.ts';
+import { host } from '#lib/i18n/host.ts';
 
 /** Maps a `GameError` to an HTTP error; rethrows anything else (including Kit redirects/errors). */
 async function run<T>(fn: () => Promise<T>): Promise<T> {
@@ -68,8 +68,6 @@ async function run<T>(fn: () => Promise<T>): Promise<T> {
 		throw e;
 	}
 }
-
-const sv = (locale: Locale, svText: string, enText: string) => (locale === 'sv' ? svText : enText);
 
 // --- Live state ----------------------------------------------------------------------------------
 
@@ -183,16 +181,16 @@ export const registerTv = command(async (): Promise<RegisterTvResult> => {
 /** Create a game (admin). On success redirects (303) to `/host/{gameId}`. */
 export const createGame = form(CreateGameSchema, async (data, issue) => {
 	requireAdmin();
-	const locale = getRequestEvent().locals.locale;
+	const t = translate(host, getRequestEvent().locals.locale);
 	let created: Awaited<ReturnType<typeof engine.createGame>>;
 	try {
 		created = await engine.createGame(data);
 	} catch (e) {
 		if (e instanceof GameError && e.code === 'NOT_FOUND') {
-			invalid(issue.playlistId(sv(locale, 'Spellistan finns inte', 'Playlist not found')));
+			invalid(issue.playlistId(t.errPlaylistNotFound));
 		}
 		if (e instanceof GameError && e.code === 'PLAYLIST_EMPTY') {
-			invalid(issue.playlistId(sv(locale, 'Spellistan har inga platser', 'The playlist has no locations')));
+			invalid(issue.playlistId(t.errPlaylistEmpty));
 		}
 		throw e;
 	}
@@ -202,19 +200,15 @@ export const createGame = form(CreateGameSchema, async (data, issue) => {
 /** Pair the TV showing `pairingCode` (admin). Wrong code → `invalid(issue.pairingCode(...))`. */
 export const pairTv = form(PairTvSchema, async (data, issue): Promise<{ paired: true }> => {
 	requireAdmin();
-	const locale = getRequestEvent().locals.locale;
+	const t = translate(host, getRequestEvent().locals.locale);
 	try {
 		await engine.pairTv(data.gameId, data.pairingCode);
 	} catch (e) {
 		if (e instanceof GameError && e.code === 'INVALID_PAIRING_CODE') {
-			invalid(
-				issue.pairingCode(
-					sv(locale, 'Ingen skärm visar den koden just nu', 'No screen is showing that code right now')
-				)
-			);
+			invalid(issue.pairingCode(t.errNoScreenWithCode));
 		}
 		if (e instanceof GameError && e.code === 'WRONG_PHASE') {
-			invalid(sv(locale, 'Spelet är redan slut', 'The game has already finished'));
+			invalid(t.errGameFinished);
 		}
 		if (e instanceof GameError) error(gameErrorStatus(e.code), e.message);
 		throw e;

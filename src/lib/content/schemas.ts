@@ -98,6 +98,8 @@ export const AttachPhotoSchema = v.object({ locationId: Uuid, photoId: v.nullabl
 export const ListQuerySchema = v.object({
 	/** Free-text search over names and clue/fact texts in both languages. */
 	query: v.optional(v.pipe(v.string(), v.trim(), v.maxLength(200))),
+	/** Only locations where a text (name, clue, fact) exists in one language but not this one. */
+	missingTranslation: v.optional(v.picklist(['sv', 'en', 'any'])),
 	limit: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(200)), 50),
 	offset: v.optional(v.pipe(v.number(), v.integer(), v.minValue(0)), 0)
 });

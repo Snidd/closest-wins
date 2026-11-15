@@ -61,11 +61,33 @@ function searchCondition(query: string | undefined): SQL | undefined {
 	);
 }
 
-/** Newest-edited first. `query` searches names, clue texts and facts in both languages. */
+const PAIRS = [
+	[location.nameSv, location.nameEn],
+	[location.clueTextSv, location.clueTextEn],
+	[location.factSv, location.factEn]
+] as const;
+const isFilled = (c: (typeof PAIRS)[number][number]) => sql`(${c} IS NOT NULL AND btrim(${c}) <> '')`;
+
+/** Some text pair is filled in the other language only (same rule as `translationGap`). */
+function missingCondition(missing: ListQuery['missingTranslation']): SQL | undefined {
+	if (!missing) return undefined;
+	return or(
+		...PAIRS.map(([sv, en]) => {
+			if (missing === 'sv') return sql`(NOT ${isFilled(sv)} AND ${isFilled(en)})`;
+			if (missing === 'en') return sql`(${isFilled(sv)} AND NOT ${isFilled(en)})`;
+			return sql`(${isFilled(sv)} <> ${isFilled(en)})`;
+		})
+	);
+}
+
+/**
+ * Newest-edited first. `query` searches names, clue texts and facts in both languages;
+ * `missingTranslation` keeps only locations with a text to translate into that language.
+ */
 export async function listLocations(
 	query: ListQuery
 ): Promise<{ items: LocationListItem[]; total: number }> {
-	const where = searchCondition(query.query);
+	const where = and(searchCondition(query.query), missingCondition(query.missingTranslation));
 	const limit = Math.min(Math.max(query.limit ?? 50, 1), 200);
 	const offset = Math.max(query.offset ?? 0, 0);
 

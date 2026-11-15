@@ -40,6 +40,11 @@ export const variables = defineEnvVars({
 		description: 'Directory for runtime data (media/ and map/). Defaults to ./data.',
 		schema: (value) => (value && value.length > 0 ? value : './data')
 	},
+	DEV_PAGES: {
+		description:
+			'Set to 1 to serve the /dev/* playground pages in a production build (the e2e suite does). Always on under `vite dev`.',
+		schema: (value) => value === '1' || value === 'true'
+	},
 	ORIGIN: {
 		description: 'Public origin of the app (e.g. https://game.example.com), used for QR/join URLs.',
 		schema: (value) => (value ? value.replace(/\/+$/, '') : 'http://localhost:5173')

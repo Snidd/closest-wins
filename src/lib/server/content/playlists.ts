@@ -116,45 +116,60 @@ export async function deletePlaylist(id: string): Promise<void> {
 	if (deleted.length === 0) throw new ContentError('NOT_FOUND', 'Playlist not found');
 }
 
-/** Replaces all items with `locationIds` in order (positions 0..n-1), in one transaction. */
-export async function setPlaylistItems(input: SetPlaylistItemsInput): Promise<void> {
-	const { playlistId, locationIds } = input;
-	if (!isUuid(playlistId)) throw new ContentError('NOT_FOUND', 'Playlist not found');
+function checkItemIds(locationIds: readonly string[]): void {
 	if (new Set(locationIds).size !== locationIds.length) {
 		throw new ContentError('INVALID', 'A location can only appear once');
 	}
 	if (locationIds.length > 500) throw new ContentError('INVALID', 'A playlist can have at most 500 locations');
 	const bad = locationIds.filter((id) => !isUuid(id));
 	if (bad.length) throw new ContentError('INVALID', `Unknown location(s): ${bad.join(', ')}`);
+}
 
+/**
+ * Runs `edit` on the playlist's current item list inside one transaction that holds the
+ * playlist row lock, then writes the list it returns (positions 0..n-1). Concurrent edits
+ * (admin reorder, MCP add/remove) serialise instead of overwriting each other.
+ */
+async function editPlaylistItems<T>(
+	playlistId: string,
+	edit: (current: string[]) => { next: string[]; result: T }
+): Promise<T> {
+	if (!isUuid(playlistId)) throw new ContentError('NOT_FOUND', 'Playlist not found');
 	try {
-		await db.transaction(async (tx) => {
-			// Lock the playlist so concurrent reorders serialise instead of interleaving.
+		return await db.transaction(async (tx) => {
 			const [current] = await tx
 				.select({ id: playlist.id })
 				.from(playlist)
 				.where(eq(playlist.id, playlistId))
 				.for('update');
 			if (!current) throw new ContentError('NOT_FOUND', 'Playlist not found');
+			const rows = await tx
+				.select({ locationId: playlistItem.locationId })
+				.from(playlistItem)
+				.where(eq(playlistItem.playlistId, playlistId))
+				.orderBy(asc(playlistItem.position));
+			const before = rows.map((r) => r.locationId);
+			const { next, result } = edit(before);
+			if (next.length === before.length && next.every((id, i) => id === before[i])) return result;
+			checkItemIds(next);
 
-			if (locationIds.length) {
-				const found = await tx
-					.select({ id: location.id })
-					.from(location)
-					.where(inArray(location.id, locationIds));
+			const added = next.filter((id) => !before.includes(id));
+			if (added.length) {
+				const found = await tx.select({ id: location.id }).from(location).where(inArray(location.id, added));
 				const foundIds = new Set(found.map((r) => r.id));
-				const missing = locationIds.filter((id) => !foundIds.has(id));
+				const missing = added.filter((id) => !foundIds.has(id));
 				if (missing.length) throw new ContentError('INVALID', `Unknown location(s): ${missing.join(', ')}`);
 			}
 
 			// Delete first: (playlist_id, position) is unique and not deferrable.
 			await tx.delete(playlistItem).where(eq(playlistItem.playlistId, playlistId));
-			if (locationIds.length) {
+			if (next.length) {
 				await tx
 					.insert(playlistItem)
-					.values(locationIds.map((locationId, position) => ({ playlistId, locationId, position })));
+					.values(next.map((locationId, position) => ({ playlistId, locationId, position })));
 			}
 			await tx.update(playlist).set({ updatedAt: new Date() }).where(eq(playlist.id, playlistId));
+			return result;
 		});
 	} catch (e) {
 		if (e instanceof ContentError) throw e;
@@ -162,6 +177,51 @@ export async function setPlaylistItems(input: SetPlaylistItemsInput): Promise<vo
 		if (pgCode(e) === '23503') throw new ContentError('INVALID', 'A location no longer exists');
 		throw e;
 	}
+}
+
+/** Replaces all items with `locationIds` in order (positions 0..n-1), in one transaction. */
+export async function setPlaylistItems(input: SetPlaylistItemsInput): Promise<void> {
+	checkItemIds(input.locationIds);
+	await editPlaylistItems(input.playlistId, () => ({ next: [...input.locationIds], result: undefined }));
+}
+
+/**
+ * Adds locations (in the given order) at a 0-based `position` (default: the end), atomically.
+ * Ids already in the playlist are skipped, not moved.
+ */
+export async function addPlaylistItems(
+	playlistId: string,
+	locationIds: readonly string[],
+	position?: number
+): Promise<{ added: string[]; alreadyInPlaylist: string[] }> {
+	return editPlaylistItems(playlistId, (current) => {
+		const present = new Set(current);
+		const requested = [...new Set(locationIds)];
+		const added = requested.filter((id) => !present.has(id));
+		const alreadyInPlaylist = requested.filter((id) => present.has(id));
+		const at = Math.min(Math.max(position ?? current.length, 0), current.length);
+		return {
+			next: [...current.slice(0, at), ...added, ...current.slice(at)],
+			result: { added, alreadyInPlaylist }
+		};
+	});
+}
+
+/** Removes locations from the playlist (not from the library), atomically. */
+export async function removePlaylistItems(
+	playlistId: string,
+	locationIds: readonly string[]
+): Promise<{ removed: string[]; notInPlaylist: string[] }> {
+	return editPlaylistItems(playlistId, (current) => {
+		const drop = new Set(locationIds);
+		return {
+			next: current.filter((id) => !drop.has(id)),
+			result: {
+				removed: current.filter((id) => drop.has(id)),
+				notInPlaylist: [...drop].filter((id) => !current.includes(id))
+			}
+		};
+	});
 }
 
 /** Number of playlists (dashboard). */

@@ -170,7 +170,12 @@ export const host = defineDict({
 		endGameExplain: 'The game stops right away and the current standings become the final result. This can’t be undone.',
 		endGameYes: 'Yes, end the game',
 		ending2: 'Ending…',
-		dangerZone: 'End early'
+		dangerZone: 'End early',
+		// --- Server-side form errors (game.remote.ts) -------------------------------------------
+		errPlaylistNotFound: 'Playlist not found',
+		errPlaylistEmpty: 'The playlist has no locations',
+		errNoScreenWithCode: 'No screen is showing that code right now',
+		errGameFinished: 'The game has already finished'
 	},
 	sv: {
 		hostTag: 'Spelledare',
@@ -332,6 +337,10 @@ export const host = defineDict({
 		endGameExplain: 'Spelet stoppas direkt och den nuvarande ställningen blir slutresultatet. Det går inte att ångra.',
 		endGameYes: 'Ja, avsluta spelet',
 		ending2: 'Avslutar…',
-		dangerZone: 'Avsluta i förtid'
+		dangerZone: 'Avsluta i förtid',
+		errPlaylistNotFound: 'Spellistan finns inte',
+		errPlaylistEmpty: 'Spellistan har inga platser',
+		errNoScreenWithCode: 'Ingen skärm visar den koden just nu',
+		errGameFinished: 'Spelet är redan slut'
 	}
 });

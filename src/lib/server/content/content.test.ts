@@ -32,6 +32,8 @@ import {
 	listPlaylists,
 	locationUsage,
 	parseContent,
+	addPlaylistItems,
+	removePlaylistItems,
 	setPlaylistItems,
 	toPhotoView,
 	updateLocation,
@@ -235,6 +237,48 @@ describe('playlists', () => {
 
 		await setPlaylistItems({ playlistId: pl.id, locationIds: [] });
 		expect((await getPlaylist(pl.id))!.items).toEqual([]);
+	});
+
+	it('adds and removes items atomically, also when edits race', async () => {
+		const pl = await createPlaylist({ nameSv: null, nameEn: `${TAG} Race`, defaultTimerSeconds: 30 });
+		created.playlists.add(pl.id);
+		const locs = [];
+		for (let i = 0; i < 6; i++) locs.push(await newLocation({ nameEn: `${TAG} R${i}` }));
+		const ids = locs.map((l) => l.id);
+
+		await setPlaylistItems({ playlistId: pl.id, locationIds: [ids[0]!, ids[1]!] });
+		expect(await addPlaylistItems(pl.id, [ids[2]!, ids[0]!], 1)).toEqual({ added: [ids[2]], alreadyInPlaylist: [ids[0]] });
+		expect((await getPlaylist(pl.id))!.items.map((i) => i.location.id)).toEqual([ids[0], ids[2], ids[1]]);
+
+		// Concurrent adds of different locations: none is lost (read-then-rewrite would drop some).
+		await Promise.all([3, 4, 5].map((i) => addPlaylistItems(pl.id, [ids[i]!])));
+		const after = (await getPlaylist(pl.id))!.items;
+		expect(new Set(after.map((i) => i.location.id))).toEqual(new Set(ids));
+		expect(after.map((i) => i.position)).toEqual([0, 1, 2, 3, 4, 5]);
+
+		const unknown = randomUUID();
+		expect(await removePlaylistItems(pl.id, [ids[2]!, unknown])).toEqual({ removed: [ids[2]], notInPlaylist: [unknown] });
+		await Promise.all([ids[3]!, ids[4]!].map((id) => removePlaylistItems(pl.id, [id])));
+		expect((await getPlaylist(pl.id))!.items.map((i) => i.location.id).sort()).toEqual([ids[0], ids[1], ids[5]].sort());
+
+		await expectCode(addPlaylistItems(pl.id, [randomUUID()]), 'INVALID', /Unknown/);
+		await expectCode(addPlaylistItems(randomUUID(), [ids[0]!]), 'NOT_FOUND');
+	});
+
+	it('lists locations missing a translation', async () => {
+		const svOnly = await newLocation({ nameEn: '', nameSv: `${TAG} Bara svenska`, clueTextEn: '', clueTextSv: 'Ledtråd' });
+		const enFact = await newLocation({ nameEn: `${TAG} Fact gap`, nameSv: `${TAG} Fact gap`, clueTextSv: 'L', factEn: 'Only English' });
+		const complete = await newLocation({ nameEn: `${TAG} Done`, nameSv: `${TAG} Klar`, clueTextSv: 'L' });
+		const idsFor = async (missingTranslation: 'sv' | 'en' | 'any') =>
+			(await listLocations({ query: TAG, missingTranslation, limit: 200, offset: 0 })).items.map((i) => i.id);
+		const needSv = await idsFor('sv');
+		const needEn = await idsFor('en');
+		const any = await idsFor('any');
+		expect(needEn).toContain(svOnly.id);
+		expect(needSv).not.toContain(svOnly.id);
+		expect(needSv).toContain(enFact.id);
+		expect(any).toEqual(expect.arrayContaining([svOnly.id, enFact.id]));
+		expect([...needSv, ...needEn, ...any]).not.toContain(complete.id);
 	});
 
 	it('validates, updates and deletes', async () => {

@@ -11,6 +11,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult, ToolAnnotations } from '@modelcontextprotocol/sdk/types.js';
 import type { z } from 'zod';
 import {
+	addPlaylistItems,
 	attachPhoto,
 	ContentError,
 	createLocation,
@@ -24,6 +25,7 @@ import {
 	listLocations,
 	listPlaylists,
 	locationUsage,
+	removePlaylistItems,
 	setPlaylistItems,
 	translationGap,
 	updateLocation,
@@ -105,11 +107,15 @@ function register<I extends z.ZodObject, O extends z.ZodObject>(
 
 const READ_ONLY = { readOnlyHint: true, openWorldHint: false } as const;
 
-/** Every location (paged through the content service), deduplicated by id. */
-async function allLocations(): Promise<Location[]> {
+/** Every location with a translation gap (paged through the content service), deduplicated by id. */
+async function locationsMissingTranslation(language?: 'sv' | 'en'): Promise<Location[]> {
 	const byId = new Map<string, Location>();
 	for (let offset = 0; ; offset += S.LIMITS.list.max) {
-		const { items, total } = await listLocations({ limit: S.LIMITS.list.max, offset });
+		const { items, total } = await listLocations({
+			limit: S.LIMITS.list.max,
+			offset,
+			missingTranslation: language ?? 'any'
+		});
 		for (const l of items) byId.set(l.id, l);
 		if (items.length === 0 || offset + items.length >= total) break;
 	}
@@ -391,18 +397,8 @@ export function registerTools(server: McpServer, ctx: ViewContext): void {
 		annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
 		hints: { INVALID: 'The playlist was not changed. Correct the list and call the tool again.' },
 		run: async ({ playlistId, locationIds, position }) => {
-			const p = (await getPlaylist(playlistId)) ?? notFound('Playlist');
-			const current = p.items.map((i) => i.location.id);
-			const present = new Set(current);
-			const requested = [...new Set(locationIds)];
-			const added = requested.filter((id) => !present.has(id));
-			const alreadyInPlaylist = requested.filter((id) => present.has(id));
-			if (added.length) {
-				const at = Math.min(position ?? current.length, current.length);
-				const next = [...current.slice(0, at), ...added, ...current.slice(at)];
-				await setPlaylistItems(S.toPlaylistItems(p.id, next));
-			}
-			return { playlist: await fullPlaylist(p.id), added, alreadyInPlaylist };
+			const { added, alreadyInPlaylist } = await addPlaylistItems(playlistId, locationIds, position);
+			return { playlist: await fullPlaylist(playlistId), added, alreadyInPlaylist };
 		}
 	});
 
@@ -414,15 +410,8 @@ export function registerTools(server: McpServer, ctx: ViewContext): void {
 		output: S.RemoveLocationsOut,
 		annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
 		run: async ({ playlistId, locationIds }) => {
-			const p = (await getPlaylist(playlistId)) ?? notFound('Playlist');
-			const current = p.items.map((i) => i.location.id);
-			const drop = new Set(locationIds);
-			const removed = current.filter((id) => drop.has(id));
-			const notInPlaylist = [...drop].filter((id) => !current.includes(id));
-			if (removed.length) {
-				await setPlaylistItems(S.toPlaylistItems(p.id, current.filter((id) => !drop.has(id))));
-			}
-			return { playlist: await fullPlaylist(p.id), removed, notInPlaylist };
+			const { removed, notInPlaylist } = await removePlaylistItems(playlistId, locationIds);
+			return { playlist: await fullPlaylist(playlistId), removed, notInPlaylist };
 		}
 	});
 
@@ -444,7 +433,7 @@ export function registerTools(server: McpServer, ctx: ViewContext): void {
 				locations = p.items.map((i) => i.location);
 				scope = playlists.filter((x) => x.id === p.id);
 			} else {
-				locations = await allLocations();
+				locations = await locationsMissingTranslation(language);
 			}
 			const gaps = locations
 				.map((l) => ({ id: l.id, nameSv: l.nameSv, nameEn: l.nameEn, toTranslate: toTranslate(l, language) }))
