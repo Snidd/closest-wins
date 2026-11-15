@@ -2,7 +2,8 @@
   The clue, as large as possible: a photo is letterboxed (never cropped) on a blurred, darkened
   copy of itself; a text clue gets big type scaled to its length; photo + text sit side by
   side (text below for very wide photos on narrow screens). The photo fades in once decoded;
-  a missing file shows a quiet placeholder instead.
+  a missing file shows a quiet placeholder instead. No photo credit here: it can name the place,
+  so it only arrives (and is shown) with the answer.
 -->
 <script lang="ts">
 	import { photoSrcset, type ClueView } from '#lib/game/types.ts';
@@ -68,9 +69,6 @@
 				onload={() => (photoState = 'ready')}
 				onerror={() => (photoState = 'error')}
 			/>
-			{#if photo.attribution}
-				<figcaption class="credit">{t().photoCredit}: {photo.attribution}</figcaption>
-			{/if}
 		</figure>
 	{/if}
 	{#if text}
@@ -146,8 +144,7 @@
 	[data-state='error'] .missing {
 		display: flex;
 	}
-	[data-state='error'] .pic,
-	[data-state='error'] .credit {
+	[data-state='error'] .pic {
 		display: none;
 	}
 	.missing {
@@ -168,21 +165,6 @@
 		height: 4rem;
 		fill: currentColor;
 		opacity: 0.7;
-	}
-	.credit {
-		position: absolute;
-		right: 0.7rem;
-		bottom: 0.6rem;
-		max-width: 60%;
-		padding: 0.15rem 0.55rem;
-		border-radius: 0.5rem;
-		background: rgb(0 0 0 / 0.55);
-		color: rgb(255 255 255 / 0.85);
-		font-size: 0.72rem;
-		line-height: 1.35;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
 	}
 
 	/* --- Text ------------------------------------------------------------------------------ */

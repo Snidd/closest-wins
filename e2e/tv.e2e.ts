@@ -407,7 +407,7 @@ test('a Swedish game is shown in Swedish whatever the browser language', async (
 	}
 });
 
-test('a photo clue is shown letterboxed with its credit; a missing file shows a placeholder', async ({
+test('a photo clue is shown letterboxed, its credit only with the answer; a missing file shows a placeholder', async ({
 	browser
 }) => {
 	const admin = await Admin.login(BASE());
@@ -431,9 +431,10 @@ test('a photo clue is shown letterboxed with its credit; a missing file shows a 
 		const img = page.locator('img.pic');
 		expect(await img.evaluate((el: HTMLImageElement) => el.naturalWidth)).toBeGreaterThan(0);
 		await expect(img).toHaveCSS('object-fit', 'contain');
-		await expect(page.getByText('Photo: Test Photographer / CC BY 4.0')).toBeVisible();
 		await expect(page.getByTestId('clue-text')).toContainText('Mountains around a cold lake');
+		// The credit can name the place: it is not even sent before the reveal.
 		expect(await page.content()).not.toContain('TV photo test place');
+		expect(await page.content()).not.toContain('Test Photographer');
 
 		// Lock-in updates must not hide the loaded photo again.
 		await g.guess('Anna', 46, 7);
@@ -448,6 +449,12 @@ test('a photo clue is shown letterboxed with its credit; a missing file shows a 
 		await page.reload();
 		await expect(page.getByTestId('photo-missing')).toBeVisible({ timeout: 10_000 });
 		await expect(page.getByTestId('clue-text')).toContainText('Mountains around a cold lake');
+
+		// With the answer comes the credit.
+		await g.endRoundNow();
+		await g.skipReveal();
+		await expect(page.getByTestId('reveal-name')).toHaveText('TV photo test place');
+		await expect(page.getByTestId('reveal-credit')).toHaveText('Photo: Test Photographer / CC BY 4.0');
 	} finally {
 		await context.close();
 		await g.cleanup();

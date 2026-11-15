@@ -3,9 +3,9 @@
  *
  * THE ANSWER NEVER LEAVES THE SERVER BEFORE REVEAL: target lat/lng, name and fact are only read
  * (`targets` in library.ts) into a `RoundResult`, which only exists in the `reveal` /
- * `standings` variants. While a round runs, nothing here selects those columns, and other
- * players' guess coordinates are not read either (only the caller's own cross and the list of
- * who has locked in).
+ * `standings` variants (so does the clue photo's credit, `revealedClues`). While a round runs,
+ * nothing here selects those columns, and other players' guess coordinates are not read either
+ * (only the caller's own cross and the list of who has locked in).
  *
  * The role-independent part of a game's state is built once per change (`gameVersion`) and
  * shared by every stream of that game; the per-player parts (own guess, own result) are added
@@ -38,7 +38,7 @@ import {
 import { gameVersion, subscriberCount } from './events.ts';
 import { connectedPlayerIds, isPresent } from './presence.ts';
 import { deps } from './deps.ts';
-import { clues, playlistNames, targets } from './library.ts';
+import { clues, playlistNames, revealedClues, targets } from './library.ts';
 import {
 	activePlayers,
 	currentRoundOf,
@@ -87,7 +87,7 @@ async function buildResult(
 ): Promise<RoundResult> {
 	const [targetMap, clueMap, rows] = await Promise.all([
 		targets([round.locationId]),
-		clues([round.locationId]),
+		revealedClues([round.locationId]),
 		db
 			.select()
 			.from(guess)

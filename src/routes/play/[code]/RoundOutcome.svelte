@@ -19,6 +19,8 @@
 	const mine = $derived(s.myResult);
 	const name = $derived(localized(result.target, 'name', locale()));
 	const fact = $derived(localized(result.target, 'fact', locale()));
+	/** The clue photo's credit (only sent with the answer: it can name the place). */
+	const credit = $derived(result.round.clue.photo);
 	const nick = (id: string) => s.players.find((p) => p.id === id)?.nickname ?? '?';
 	const winnersOthers = $derived(result.winnerPlayerIds.filter((id) => id !== s.me.id));
 	const winnerDistance = $derived(result.guesses.find((g) => g.isWinner)?.distanceKm ?? null);
@@ -68,6 +70,17 @@
 	<p class="eyebrow">{t().theAnswer}</p>
 	<h2 data-testid="answer-name">{name}</h2>
 	{#if fact && !compact}<p class="fact">{fact}</p>{/if}
+	{#if credit && (credit.attribution || credit.sourceUrl) && !compact}
+		<p class="credit" data-testid="answer-credit">
+			{#if credit.sourceUrl}
+				<a href={credit.sourceUrl} target="_blank" rel="noopener noreferrer nofollow"
+					>{credit.attribution ? t().photoBy(credit.attribution) : t().photoSource}</a
+				>
+			{:else}
+				{t().photoBy(credit.attribution!)}
+			{/if}
+		</p>
+	{/if}
 	{#if !compact}
 		<div class="map" aria-label={t().mapOfGuesses}>
 			<RevealMap
@@ -194,6 +207,14 @@
 		text-wrap: pretty;
 		-webkit-user-select: text;
 		user-select: text;
+	}
+	.credit {
+		color: var(--color-text-muted);
+		font-size: var(--text-xs);
+		overflow-wrap: anywhere;
+	}
+	.credit a {
+		color: inherit;
 	}
 	.map {
 		height: clamp(11rem, 32dvh, 16rem);

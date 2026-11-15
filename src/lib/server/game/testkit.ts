@@ -3,10 +3,10 @@
  * named locations/playlist in the shared dev database and removes exactly what it created.
  * Fake clock + timers are injected through `setEngineDeps`, so nothing sleeps.
  */
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { eq, inArray } from 'drizzle-orm';
 import { db } from '#lib/server/db/index.ts';
-import { game, location, playlist, playlistItem, tvScreen } from '#lib/server/db/schema.ts';
+import { game, location, photo, playlist, playlistItem, tvScreen } from '#lib/server/db/schema.ts';
 import { setEngineDeps } from './deps.ts';
 import { resetEngineMemory } from './engine.ts';
 
@@ -58,6 +58,7 @@ export interface Fixture {
 	library: string[];
 	gameIds: string[];
 	tvIds: string[];
+	photoIds: string[];
 	restore: () => void;
 	cleanup: () => Promise<void>;
 }
@@ -95,6 +96,7 @@ export async function createFixture(count = 6): Promise<Fixture> {
 		library: locations.map((l) => l.id),
 		gameIds: [],
 		tvIds: [],
+		photoIds: [],
 		restore: () => {},
 		cleanup: async () => {
 			resetEngineMemory();
@@ -104,6 +106,7 @@ export async function createFixture(count = 6): Promise<Fixture> {
 			const ids = [...new Set([...fx.gameIds, ...games.map((g) => g.id)])];
 			if (ids.length) await db.delete(game).where(inArray(game.id, ids));
 			await db.delete(playlist).where(eq(playlist.id, pl!.id));
+			if (fx.photoIds.length) await db.delete(photo).where(inArray(photo.id, fx.photoIds));
 			await db.delete(location).where(
 				inArray(
 					location.id,
@@ -120,4 +123,23 @@ export async function createFixture(count = 6): Promise<Fixture> {
 		libraryLocationIds: async () => [...fx.library]
 	});
 	return fx;
+}
+
+/**
+ * Gives `loc` a clue photo row (no files; only its URLs are used) with the given credit, e.g.
+ * one that names the place, as real Wikimedia imports often do. Returns the random file key.
+ */
+export async function addPhoto(
+	fx: Fixture,
+	loc: FixtureLocation,
+	meta: { attribution: string | null; sourceUrl: string | null }
+): Promise<string> {
+	const fileKey = randomBytes(16).toString('base64url');
+	const [row] = await db
+		.insert(photo)
+		.values({ fileKey, width: 1600, height: 1000, ...meta })
+		.returning({ id: photo.id });
+	fx.photoIds.push(row!.id);
+	await db.update(location).set({ photoId: row!.id }).where(eq(location.id, loc.id));
+	return fileKey;
 }

@@ -15,7 +15,7 @@
 import { and, eq, lt, notExists, sql } from 'drizzle-orm';
 import type { ImportPhotoInput, UploadPhotoInput } from '#lib/content/schemas.ts';
 import { TEXT_MAX } from '#lib/content/schemas.ts';
-import { PHOTO_SIZES, photoUrl, type PhotoSize, type PhotoView } from '#lib/game/types.ts';
+import { PHOTO_SIZES, photoUrl, type CluePhotoView, type PhotoSize, type PhotoView } from '#lib/game/types.ts';
 import { db, type Executor } from '#lib/server/db/index.ts';
 import { location, photo, type Photo } from '#lib/server/db/schema.ts';
 import { fetchRemoteImage } from '../media/import.ts';
@@ -29,18 +29,22 @@ import { checkLength, clean, filled, isUuid } from './validate.ts';
 /** Unattached photos younger than this are kept (an editor may still be open). */
 export const ORPHAN_PHOTO_GRACE_MS = 24 * 60 * 60 * 1000;
 
-/** Client-facing view of a photo (URLs per size). Used by game views and the admin UI. */
-export function toPhotoView(photo: Photo): PhotoView {
+/**
+ * The image part of a photo (URLs per size), without credit or source: what a running round may
+ * send (the credit can name the place).
+ */
+export function toCluePhotoView(photo: Pick<Photo, 'fileKey' | 'width' | 'height'>): CluePhotoView {
 	const urls = Object.fromEntries(
 		(Object.keys(PHOTO_SIZES) as PhotoSize[]).map((size) => [size, photoUrl(photo.fileKey, size)])
 	) as Record<PhotoSize, string>;
-	return {
-		width: photo.width,
-		height: photo.height,
-		urls,
-		attribution: photo.attribution,
-		sourceUrl: photo.sourceUrl
-	};
+	return { width: photo.width, height: photo.height, urls };
+}
+
+/** Client-facing view of a photo including its credit (revealed rounds). */
+export function toPhotoView(
+	photo: Pick<Photo, 'fileKey' | 'width' | 'height' | 'attribution' | 'sourceUrl'>
+): PhotoView {
+	return { ...toCluePhotoView(photo), attribution: photo.attribution, sourceUrl: photo.sourceUrl };
 }
 
 export async function getPhoto(id: string): Promise<Photo | null> {

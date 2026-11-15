@@ -121,6 +121,8 @@ export const host = defineDict({
 
 		// --- Reveal -----------------------------------------------------------------------------
 		answer: 'Answer',
+		photoBy: (credit: string) => `Photo: ${credit}`,
+		photoSource: 'Photo source',
 		tvRevealing: 'The TV is revealing the answer…',
 		tvRevealDone: 'Revealed on the TV',
 		skipAnimation: 'Skip animation',
@@ -291,6 +293,8 @@ export const host = defineDict({
 		endsByItself: 'Rundan slutar när tiden är ute eller när alla har låst.',
 
 		answer: 'Svar',
+		photoBy: (credit) => `Foto: ${credit}`,
+		photoSource: 'Fotokälla',
 		tvRevealing: 'Tv:n avslöjar svaret…',
 		tvRevealDone: 'Avslöjat på tv:n',
 		skipAnimation: 'Hoppa över animationen',

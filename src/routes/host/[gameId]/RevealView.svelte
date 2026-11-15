@@ -19,6 +19,8 @@
 	const who = $derived(playerLookup(snap.players, snap.standings));
 	const place = $derived(localized(result.target, 'name', locale));
 	const fact = $derived(localized(result.target, 'fact', locale));
+	/** The clue photo's credit (only sent with the answer: it can name the place). */
+	const credit = $derived(result.round.clue.photo);
 	const winnerNames = $derived(result.winnerPlayerIds.map((id) => who(id).nickname));
 	const best = $derived(result.guesses.find((g) => g.isWinner));
 </script>
@@ -32,6 +34,17 @@
 	<h2 id="answer-title" class="eyebrow">{t().answer}</h2>
 	<p class="place" data-testid="reveal-place">{place}</p>
 	{#if fact}<p class="fact">{fact}</p>{/if}
+	{#if credit && (credit.attribution || credit.sourceUrl)}
+		<p class="credit" data-testid="reveal-credit">
+			{#if credit.sourceUrl}
+				<a href={credit.sourceUrl} target="_blank" rel="noopener noreferrer nofollow"
+					>{credit.attribution ? t().photoBy(credit.attribution) : t().photoSource}</a
+				>
+			{:else}
+				{t().photoBy(credit.attribution!)}
+			{/if}
+		</p>
+	{/if}
 </section>
 
 <section class="winner" data-testid="round-winner">
@@ -125,6 +138,14 @@
 	.fact {
 		color: var(--color-text-muted);
 		text-wrap: pretty;
+	}
+	.credit {
+		color: var(--color-text-muted);
+		font-size: var(--text-xs);
+		overflow-wrap: anywhere;
+	}
+	.credit a {
+		color: inherit;
 	}
 	.winner {
 		display: flex;

@@ -10,6 +10,8 @@
  * THE ANSWER NEVER LEAVES THE SERVER BEFORE REVEAL. Target coordinates, name and fact exist
  * only in `RoundResult`, which only appears in the `reveal` and `standings` phase variants.
  * The `round` variant declares `result?: never`, so attaching a result there is a type error.
+ * The clue photo's credit and source URL (which often name the place) likewise only exist in
+ * `RoundResult.round.clue`; a running round's `ClueView` declares them `never`.
  *
  * Times are epoch milliseconds on the server clock. Every snapshot carries `serverNow`; clients
  * compute `offsetMs = serverNow - Date.now()` when a snapshot arrives (see `clockOffset` in
@@ -93,18 +95,40 @@ export function photoSrcset(
 /** Epoch milliseconds, server clock. */
 export type EpochMs = number;
 
-export interface PhotoView {
+/**
+ * A clue photo as sent while a round runs: the image only. Its credit and source can name the
+ * place ("Eiffel Tower by Jane Doe", `…/Sagrada_Familia.jpg`), so they are answer material and
+ * arrive with the reveal (`RoundRef.clue`). The `never` fields make attaching them a type error.
+ * Image URLs carry only the random `fileKey`.
+ */
+export interface CluePhotoView {
 	/** Dimensions of the largest variant; use for aspect ratio. */
 	width: number;
 	height: number;
 	urls: Record<PhotoSize, string>;
+	attribution?: never;
+	sourceUrl?: never;
+}
+
+/** Credit of a clue photo. Only sent once the round has ended. */
+export interface PhotoCredit {
 	attribution: string | null;
 	sourceUrl: string | null;
 }
 
+/** A photo with its credit (revealed rounds). */
+export type PhotoView = Omit<CluePhotoView, keyof PhotoCredit> & PhotoCredit;
+
 /** A clue: optional photo and optional text (at least one is present). Both languages are sent;
- *  render with `localized(clue, 'text', locale)`. */
+ *  render with `localized(clue, 'text', locale)`. Never carries the photo credit. */
 export interface ClueView {
+	textSv: string | null;
+	textEn: string | null;
+	photo: CluePhotoView | null;
+}
+
+/** The clue of an ended round, now with the photo credit (show it with the answer). */
+export interface RevealedClueView {
 	textSv: string | null;
 	textEn: string | null;
 	photo: PhotoView | null;
@@ -159,9 +183,11 @@ export interface ActiveRound {
 }
 
 /** A finished round as referenced by reveal/standings (same identity fields as `ActiveRound`). */
-export type RoundRef = Omit<ActiveRound, 'startedAt' | 'endsAt'> & {
+export type RoundRef = Omit<ActiveRound, 'startedAt' | 'endsAt' | 'clue'> & {
 	startedAt: EpochMs;
 	endedAt: EpochMs;
+	/** Includes the photo credit; show it no earlier than the answer (`answerShownAt`). */
+	clue: RevealedClueView;
 };
 
 /** The answer. Only ever present inside `RoundResult`. */

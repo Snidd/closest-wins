@@ -64,6 +64,8 @@
 	const byId = $derived(new Map(players.map((p) => [p.id, p])));
 	const name = $derived(localized(result.target, 'name', locale()));
 	const fact = $derived(localized(result.target, 'fact', locale()));
+	/** The clue photo's credit: it can name the place, so it is shown with the answer only. */
+	const credit = $derived(result.round.clue.photo?.attribution ?? null);
 	const winners = $derived(result.winnerPlayerIds.map((id) => byId.get(id)).filter((p) => !!p));
 	const winnerKm = $derived(result.guesses.find((g) => g.isWinner)?.distanceKm ?? null);
 	const guessCount = $derived(result.guesses.length);
@@ -166,6 +168,9 @@
 			<h1 class="place" style:font-size="{nameSize}rem" data-testid="reveal-name">{name}</h1>
 			{#if fact}
 				<p class="fact" style:font-size="{factSize}rem" data-testid="reveal-fact">{fact}</p>
+			{/if}
+			{#if credit}
+				<p class="credit" data-testid="reveal-credit">{t().photoCredit}: {credit}</p>
 			{/if}
 		</div>
 	{/if}
@@ -411,6 +416,17 @@
 		line-clamp: 4;
 		-webkit-box-orient: vertical;
 		animation: rise 800ms 700ms var(--ease-out) both;
+	}
+	.credit {
+		max-width: 52ch;
+		font-size: 0.72rem;
+		line-height: 1.35;
+		color: var(--tv-ink-3);
+		text-shadow: 0 0.1rem 0.6rem rgb(0 0 0 / 0.8);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		animation: rise 800ms 900ms var(--ease-out) both;
 	}
 	@keyframes land {
 		from {

@@ -37,7 +37,7 @@ import { buildHostSnapshot, buildPlayerStateForGame, buildTvState } from './view
 import { getGameHistory, listGames } from './history.ts';
 import { enterPresence } from './presence.ts';
 import { haversineKm } from './rules.ts';
-import { createFixture, type Fixture, type FixtureLocation } from './testkit.ts';
+import { addPhoto, createFixture, type Fixture, type FixtureLocation } from './testkit.ts';
 
 let fx: Fixture;
 let events: EngineEvent[] = [];
@@ -707,6 +707,11 @@ describe('the answer never leaks before reveal', () => {
 		if (pairing.status !== 'pairing') throw new Error('expected pairing');
 		await pairTv(gameId, pairing.pairingCode);
 		const l0 = fx.locations[0]!;
+		// A photo whose credit and source name the place (typical for Wikimedia imports).
+		const fileKey = await addPhoto(fx, l0, {
+			attribution: `${l0.name} by CreditMarker, CC BY-SA 4.0`,
+			sourceUrl: `https://commons.example.org/wiki/File:${l0.name}_SourceMarker.jpg`
+		});
 		await startRound(gameId);
 		// Bob's distinctive cross must not reach Alice (or the TV/host) either.
 		const bobPos = { lat: 33.987123, lng: -44.876543 };
@@ -726,13 +731,18 @@ describe('the answer never leaks before reveal', () => {
 			l0.fact,
 			`${l0.name}Sv`,
 			`${l0.fact}Sv`,
+			'CreditMarker',
+			'SourceMarker',
 			'987123',
 			'876543'
 		];
 		for (const s of snapshots) {
 			const json = JSON.stringify(s);
 			expect(json).toContain(l0.clue); // sanity: it is the right round
-			for (const f of forbidden.slice(0, 6)) expect(json).not.toContain(f);
+			expect(json).toContain(`/media/${fileKey}/md.webp`); // the photo is there, by random key
+			for (const f of forbidden.slice(0, 8)) expect(json).not.toContain(f);
+			expect(json).not.toContain('"attribution"');
+			expect(json).not.toContain('"sourceUrl"');
 			if (!(s.role === 'player' && s.status === 'playing' && s.me.id === b.playerId)) {
 				for (const f of forbidden.slice(6)) expect(json).not.toContain(f);
 			}
@@ -740,11 +750,18 @@ describe('the answer never leaks before reveal', () => {
 			expect(json).not.toContain('"target"');
 		}
 
-		// Once revealed, the answer is there.
+		// Once revealed, the answer is there, and the photo credit with it.
 		await endRoundNow(gameId);
-		const json = JSON.stringify(await buildTvState(reg.token));
+		const tv = await buildTvState(reg.token);
+		const json = JSON.stringify(tv);
 		expect(json).toContain(l0.name);
 		expect(json).toContain(l0.fact);
 		expect(json).toContain(String(l0.lat));
+		if (tv.status !== 'paired' || tv.phase !== 'reveal') throw new Error('expected reveal');
+		expect(tv.result.round.clue.photo).toMatchObject({
+			attribution: expect.stringContaining('CreditMarker'),
+			sourceUrl: expect.stringContaining('SourceMarker'),
+			urls: { md: `/media/${fileKey}/md.webp` }
+		});
 	});
 });

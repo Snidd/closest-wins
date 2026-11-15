@@ -4,11 +4,11 @@
 -->
 <script lang="ts">
 	import { fade } from 'svelte/transition';
-	import { photoSrcset, type PhotoView } from '#lib/game/types.ts';
+	import { photoSrcset, type CluePhotoView } from '#lib/game/types.ts';
 	import { useT } from '#lib/i18n/context.ts';
 	import { player } from '#lib/i18n/player.ts';
 
-	type Props = { photo: PhotoView; alt: string; onclose: () => void };
+	type Props = { photo: CluePhotoView; alt: string; onclose: () => void };
 	let { photo, alt, onclose }: Props = $props();
 	const t = useT(player);
 
@@ -201,9 +201,6 @@
 
 	<div class="caption">
 		<p class="hint">{t().photoHint}</p>
-		{#if photo.attribution}
-			<p class="credit">{t().photoBy(photo.attribution)}</p>
-		{/if}
 	</div>
 </div>
 
@@ -277,9 +274,5 @@
 	}
 	.hint {
 		opacity: 0.75;
-	}
-	.credit {
-		opacity: 0.6;
-		margin-top: var(--space-1);
 	}
 </style>

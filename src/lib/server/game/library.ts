@@ -5,15 +5,16 @@
  * `getLocation` / `getPlaylist` return whole rows, including the answer. The engine must not
  * select the target while a round runs, so these narrow selects live here, split by what may
  * be read when:
- * - `clues` (no coordinates, name or fact): always.
- * - `targets`: only for rounds that have ended (round end, reveal, standings, history).
+ * - `clues` (no coordinates, name, fact or photo credit): always.
+ * - `targets`, `revealedClues`: only for rounds that have ended (round end, reveal, standings,
+ *   history).
  * Nothing here writes. Candidates to move into `#lib/server/content/` as-is.
  */
 import { asc, eq, inArray } from 'drizzle-orm';
 import { db, type Executor } from '#lib/server/db/index.ts';
-import { location, photo, playlist, playlistItem, type Photo } from '#lib/server/db/schema.ts';
-import type { BilingualName, ClueView, RevealTarget } from '#lib/game/types.ts';
-import { toPhotoView } from '#lib/server/content/photos.ts';
+import { location, photo, playlist, playlistItem } from '#lib/server/db/schema.ts';
+import type { BilingualName, ClueView, RevealedClueView, RevealTarget } from '#lib/game/types.ts';
+import { toCluePhotoView, toPhotoView } from '#lib/server/content/photos.ts';
 
 /** The playlist's location ids in order, or null if the playlist does not exist. */
 export async function playlistLocationIds(
@@ -45,7 +46,10 @@ export async function playlistNames(
 	return new Map(rows.map((r) => [r.id, { nameSv: r.nameSv, nameEn: r.nameEn }]));
 }
 
-/** Clue text and photo per location. Never selects coordinates, name or fact. */
+/**
+ * Clue text and photo image per location. Never selects coordinates, name, fact or the photo's
+ * credit/source (those can name the place: see `revealedClues`).
+ */
 export async function clues(
 	locationIds: readonly string[],
 	ex: Executor = db
@@ -56,20 +60,49 @@ export async function clues(
 			id: location.id,
 			textSv: location.clueTextSv,
 			textEn: location.clueTextEn,
-			photo: photo
+			fileKey: photo.fileKey,
+			width: photo.width,
+			height: photo.height
 		})
 		.from(location)
 		.leftJoin(photo, eq(photo.id, location.photoId))
 		.where(inArray(location.id, [...new Set(locationIds)]));
 	return new Map(
-		rows.map((r) => [
-			r.id,
+		rows.map(({ id, textSv, textEn, fileKey, width, height }) => [
+			id,
 			{
-				textSv: r.textSv,
-				textEn: r.textEn,
-				photo: r.photo ? toPhotoView(r.photo as Photo) : null
+				textSv,
+				textEn,
+				photo: fileKey !== null && width !== null && height !== null ? toCluePhotoView({ fileKey, width, height }) : null
 			}
 		])
+	);
+}
+
+/** Clues including the photo credit and source. ONLY call for rounds that have ended. */
+export async function revealedClues(
+	locationIds: readonly string[],
+	ex: Executor = db
+): Promise<Map<string, RevealedClueView>> {
+	if (locationIds.length === 0) return new Map();
+	const rows = await ex
+		.select({
+			id: location.id,
+			textSv: location.clueTextSv,
+			textEn: location.clueTextEn,
+			photo: {
+				fileKey: photo.fileKey,
+				width: photo.width,
+				height: photo.height,
+				attribution: photo.attribution,
+				sourceUrl: photo.sourceUrl
+			}
+		})
+		.from(location)
+		.leftJoin(photo, eq(photo.id, location.photoId))
+		.where(inArray(location.id, [...new Set(locationIds)]));
+	return new Map(
+		rows.map((r) => [r.id, { textSv: r.textSv, textEn: r.textEn, photo: r.photo ? toPhotoView(r.photo) : null }])
 	);
 }
 
