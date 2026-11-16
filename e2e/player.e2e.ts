@@ -15,7 +15,7 @@ import {
 	type Bot,
 	type TestGame
 } from './helpers/fixtures.ts';
-import { GUESS_DEBOUNCE_WAIT, joinViaUi, newPhone, panMap, type PhoneOptions } from './helpers/phone.ts';
+import { GUESS_DEBOUNCE_WAIT, joinViaUi, newPhone, panMap, steerTo, type PhoneOptions } from './helpers/phone.ts';
 import { remoteId } from './helpers/remote.ts';
 import { SimPlayer } from './helpers/sim.ts';
 
@@ -410,6 +410,33 @@ test('a round the server is late to end does not make the phone reconnect on eve
 	expect(opened.length).toBeGreaterThanOrEqual(1);
 	expect(opened.length).toBeLessThanOrEqual(2);
 	await expect(page.getByTestId('round')).toBeVisible();
+});
+
+test('the test helper steers a busy phone onto its target without overshooting', async ({ browser }) => {
+	// Guards the helper the multi-screen tests rely on: on a loaded renderer, gestures released
+	// right after their last move flung the map and steering oscillated until the round ended.
+	test.setTimeout(120_000);
+	const h = await getHost(browser);
+	const g = await game({ timerSeconds: 300 });
+	const { page } = await phone(browser);
+	await joinViaUi(page, g.code, uniq('Busy'));
+	await h.startRound(g.id);
+	await expect(page.getByTestId('round')).toBeVisible();
+	// The main thread is blocked for 170 ms of every 200 ms (five screens rendering at once).
+	await page.evaluate(() => {
+		setInterval(() => {
+			const t = performance.now();
+			while (performance.now() - t < 170);
+		}, 200);
+	});
+	for (const target of [
+		{ lat: 41.89021, lng: 14.49223 },
+		{ lat: 48.858, lng: 4.29 }
+	]) {
+		const v = await steerTo(page, g.id, 0, target);
+		expect(Math.abs(v.lat - target.lat)).toBeLessThan(0.1);
+		expect(Math.abs(v.lng - target.lng)).toBeLessThan(0.1);
+	}
 });
 
 test('losing the connection shows an indicator and recovers by itself', async ({ browser }) => {
