@@ -32,6 +32,8 @@ Read `INTEND.md` (product + rules) and the approved plan before changing behavio
 - Remote functions (`query`, `query.live`, `command`, `form` from `$app/server`) + async Svelte
   (`await` in components) are enabled. `query.live` (async generator → streamed to the client,
   `.connected`, `.reconnect()`) is the realtime channel; no hand-written SSE/WebSockets.
+  Single exception: `/tv/native/stream` (plain-JSON SSE of `tvStream()`, bearer token) for the
+  native Apple TV app, which cannot run Kit's client.
 - Queries cannot set cookies or read `event.url`/`params`; only `form`/`command` can set
   cookies. Every remote function authenticates its caller itself (`requireAdmin()`, or a
   player/TV token lookup); never trust `url`/`params` for auth. `redirect` is not allowed in
@@ -93,6 +95,7 @@ src/lib/server/mcp/           MCP tools over content/
 src/lib/server/files/         DATA_DIR paths + Range-capable file responses
 src/routes/                   / · /join/[code] · /play/[code] · /host · /host/[gameId] · /tv
                               /admin/... · /login · /mcp · /media/[...key] · /map/[file]
+                              /tv/native/register (POST) · /tv/native/stream (GET): Apple TV app
 scripts/seed.ts               pnpm seed
 drizzle/                      generated SQL migrations (committed)
 src/lib/surface.ts            route → <html data-surface> + viewport (server hook and root layout)

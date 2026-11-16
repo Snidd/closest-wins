@@ -50,10 +50,10 @@ import {
 	joinLimiter,
 	requireAdmin,
 	setPlayerToken,
-	setTvToken,
-	tvRegisterLimiter
+	setTvToken
 } from '#lib/server/auth/index.ts';
 import * as engine from '#lib/server/game/engine.ts';
+import { registerTvScreen } from '#lib/server/game/tv-register.ts';
 import { GameError, gameErrorStatus } from '#lib/server/game/engine.ts';
 import { hostStream, playerStream, tvStream } from '#lib/server/game/streams.ts';
 import * as history from '#lib/server/game/history.ts';
@@ -184,15 +184,8 @@ export const lockIn = command(LockInSchema, async (input): Promise<void> => {
  */
 export const registerTv = command(async (): Promise<RegisterTvResult> => {
 	const event = getRequestEvent();
-	const existing = getTvToken(event.cookies);
-	if (!existing || !(await engine.resolveTv(existing))) {
-		// Only new screens create rows; limit those per address.
-		const key = `tv:${event.getClientAddress()}`;
-		const limit = tvRegisterLimiter.check(key);
-		if (!limit.allowed) error(429, 'Too many new screens from this address; try again later');
-		tvRegisterLimiter.fail(key);
-	}
-	const r = await engine.registerTv(existing);
+	// Only new screens create rows; those are limited per address (429).
+	const r = await registerTvScreen(getTvToken(event.cookies), event.getClientAddress());
 	if (r.token) setTvToken(event.cookies, event.url, r.token);
 	return { tvId: r.tvId };
 });

@@ -1,0 +1,68 @@
+{
+	"serverNow": 1794855622000,
+	"game": {
+		"id": "10000000-0000-4000-8000-000000000001",
+		"joinCode": "KDRW",
+		"joinUrl": "http://192.168.1.20:5173/join/KDRW",
+		"language": "en",
+		"playlistName": {
+			"nameSv": "Kända landmärken",
+			"nameEn": "Famous landmarks"
+		},
+		"timerSeconds": 30,
+		"totalRounds": 3
+	},
+	"players": [
+		{
+			"id": "20000000-0000-4000-8000-000000000001",
+			"nickname": "Alice",
+			"color": "#e6424a",
+			"connected": true,
+			"lateJoiner": false
+		},
+		{
+			"id": "20000000-0000-4000-8000-000000000002",
+			"nickname": "Bob",
+			"color": "#2debf9",
+			"connected": true,
+			"lateJoiner": false
+		},
+		{
+			"id": "20000000-0000-4000-8000-000000000003",
+			"nickname": "Cleo",
+			"color": "#0867a9",
+			"connected": false,
+			"lateJoiner": false
+		},
+		{
+			"id": "20000000-0000-4000-8000-000000000004",
+			"nickname": "Dara",
+			"color": "#519c03",
+			"connected": true,
+			"lateJoiner": true
+		}
+	],
+	"role": "tv",
+	"status": "paired",
+	"phase": "round",
+	"round": {
+		"index": 1,
+		"number": 2,
+		"isSuddenDeath": false,
+		"eligiblePlayerIds": [
+			"20000000-0000-4000-8000-000000000001",
+			"20000000-0000-4000-8000-000000000002",
+			"20000000-0000-4000-8000-000000000003"
+		],
+		"startedAt": 1794855616000,
+		"endsAt": 1794855646000,
+		"clue": {
+			"textSv": "En jättelik röd sandstensklippa reser sig ur öknen.",
+			"textEn": "A giant red sandstone rock rises from the desert.",
+			"photo": null
+		}
+	},
+	"lockedPlayerIds": [
+		"20000000-0000-4000-8000-000000000002"
+	]
+}

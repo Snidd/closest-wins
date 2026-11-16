@@ -1,0 +1,143 @@
+{
+	"serverNow": 1794855616000,
+	"game": {
+		"id": "10000000-0000-4000-8000-000000000001",
+		"joinCode": "KDRW",
+		"joinUrl": "http://192.168.1.20:5173/join/KDRW",
+		"language": "en",
+		"playlistName": {
+			"nameSv": "Kända landmärken",
+			"nameEn": "Famous landmarks"
+		},
+		"timerSeconds": 30,
+		"totalRounds": 3
+	},
+	"players": [
+		{
+			"id": "20000000-0000-4000-8000-000000000001",
+			"nickname": "Alice",
+			"color": "#e6424a",
+			"connected": true,
+			"lateJoiner": false
+		},
+		{
+			"id": "20000000-0000-4000-8000-000000000002",
+			"nickname": "Bob",
+			"color": "#2debf9",
+			"connected": true,
+			"lateJoiner": false
+		},
+		{
+			"id": "20000000-0000-4000-8000-000000000003",
+			"nickname": "Cleo",
+			"color": "#0867a9",
+			"connected": false,
+			"lateJoiner": false
+		}
+	],
+	"role": "tv",
+	"status": "paired",
+	"phase": "standings",
+	"result": {
+		"round": {
+			"index": 0,
+			"number": 1,
+			"isSuddenDeath": false,
+			"eligiblePlayerIds": [
+				"20000000-0000-4000-8000-000000000001",
+				"20000000-0000-4000-8000-000000000002",
+				"20000000-0000-4000-8000-000000000003"
+			],
+			"clue": {
+				"textSv": null,
+				"textEn": null,
+				"photo": {
+					"width": 1600,
+					"height": 1000,
+					"urls": {
+						"sm": "/media/fixturePhotoKey1000000/sm.webp",
+						"md": "/media/fixturePhotoKey1000000/md.webp",
+						"lg": "/media/fixturePhotoKey1000000/lg.webp"
+					},
+					"attribution": "Eiffel Tower at dusk by Jane Doe, CC BY-SA 4.0",
+					"sourceUrl": "https://commons.wikimedia.org/wiki/File:Eiffel_Tower_at_dusk.jpg"
+				}
+			},
+			"startedAt": 1794855603000,
+			"endedAt": 1794855615000
+		},
+		"target": {
+			"lat": 48.8584,
+			"lng": 2.2945,
+			"nameSv": "Eiffeltornet",
+			"nameEn": "Eiffel Tower",
+			"factSv": "Det var bara tänkt att stå i 20 år.",
+			"factEn": "It was only meant to stand for 20 years."
+		},
+		"guesses": [
+			{
+				"playerId": "20000000-0000-4000-8000-000000000001",
+				"lat": 49.2584,
+				"lng": 2.6945,
+				"distanceKm": 53.176729649468065,
+				"rank": 1,
+				"isWinner": true,
+				"locked": true
+			},
+			{
+				"playerId": "20000000-0000-4000-8000-000000000002",
+				"lat": 51.3584,
+				"lng": 4.7945,
+				"distanceKm": 330.2008821093299,
+				"rank": 2,
+				"isWinner": false,
+				"locked": false
+			}
+		],
+		"noGuessPlayerIds": [
+			"20000000-0000-4000-8000-000000000003"
+		],
+		"winnerPlayerIds": [
+			"20000000-0000-4000-8000-000000000001"
+		],
+		"revealStartedAt": 1794855615000,
+		"answerVisibleAt": 1794855618000,
+		"skipped": false
+	},
+	"standings": [
+		{
+			"playerId": "20000000-0000-4000-8000-000000000001",
+			"nickname": "Alice",
+			"color": "#e6424a",
+			"rank": 1,
+			"roundsWon": 1,
+			"totalDistanceKm": 53.176729649468065,
+			"guessedRounds": 1,
+			"connected": true
+		},
+		{
+			"playerId": "20000000-0000-4000-8000-000000000002",
+			"nickname": "Bob",
+			"color": "#2debf9",
+			"rank": 2,
+			"roundsWon": 0,
+			"totalDistanceKm": 330.2008821093299,
+			"guessedRounds": 1,
+			"connected": true
+		},
+		{
+			"playerId": "20000000-0000-4000-8000-000000000003",
+			"nickname": "Cleo",
+			"color": "#0867a9",
+			"rank": 2,
+			"roundsWon": 0,
+			"totalDistanceKm": 0,
+			"guessedRounds": 0,
+			"connected": false
+		}
+	],
+	"next": {
+		"kind": "round",
+		"number": 2
+	}
+}

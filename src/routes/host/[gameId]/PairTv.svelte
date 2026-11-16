@@ -1,5 +1,5 @@
 <!--
-  Pair the big screen: the TV at `<origin>/tv` shows a 6-digit code; typing it here attaches that
+  Pair the big screen: the TV at `<origin>/tv` (or the Apple TV app) shows a 6-digit code; typing it here attaches that
   screen to this game. Submits by itself once six digits are in. Render at most one instance at
   a time (it uses the shared `pairTv` remote form).
 -->
@@ -76,6 +76,7 @@
 		<li>
 			<span>{t().tvStep1}</span>
 			<strong class="url">{tvUrl.replace(/^https?:\/\//, '')}</strong>
+			<span class="alt">{t().tvStep1AppleTv}</span>
 		</li>
 		<li><span>{t().tvStep2}</span></li>
 	</ol>
@@ -153,6 +154,10 @@
 		font-family: var(--font-mono);
 		font-size: var(--text-lg);
 		word-break: break-all;
+	}
+	.alt {
+		color: var(--color-text-muted);
+		font-size: var(--text-sm);
 	}
 	.entry {
 		display: flex;

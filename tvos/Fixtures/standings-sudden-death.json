@@ -1,0 +1,143 @@
+{
+	"serverNow": 1794855637500,
+	"game": {
+		"id": "10000000-0000-4000-8000-000000000002",
+		"joinCode": "HMPT",
+		"joinUrl": "http://192.168.1.20:5173/join/HMPT",
+		"language": "sv",
+		"playlistName": {
+			"nameSv": "Kända landmärken",
+			"nameEn": "Famous landmarks"
+		},
+		"timerSeconds": 30,
+		"totalRounds": 2
+	},
+	"players": [
+		{
+			"id": "20000000-0000-4000-8000-000000000005",
+			"nickname": "Åsa",
+			"color": "#e6424a",
+			"connected": true,
+			"lateJoiner": false
+		},
+		{
+			"id": "20000000-0000-4000-8000-000000000006",
+			"nickname": "Björn",
+			"color": "#2debf9",
+			"connected": true,
+			"lateJoiner": false
+		},
+		{
+			"id": "20000000-0000-4000-8000-000000000007",
+			"nickname": "Cia",
+			"color": "#0867a9",
+			"connected": true,
+			"lateJoiner": false
+		}
+	],
+	"role": "tv",
+	"status": "paired",
+	"phase": "standings",
+	"result": {
+		"round": {
+			"index": 1,
+			"number": 2,
+			"isSuddenDeath": false,
+			"eligiblePlayerIds": [
+				"20000000-0000-4000-8000-000000000005",
+				"20000000-0000-4000-8000-000000000006",
+				"20000000-0000-4000-8000-000000000007"
+			],
+			"clue": {
+				"textSv": "En jättelik röd sandstensklippa reser sig ur öknen.",
+				"textEn": "A giant red sandstone rock rises from the desert.",
+				"photo": null
+			},
+			"startedAt": 1794855637500,
+			"endedAt": 1794855637500
+		},
+		"target": {
+			"lat": -25.3444,
+			"lng": 131.0369,
+			"nameSv": "Uluru",
+			"nameEn": "Uluru",
+			"factSv": "Klippan reser sig ungefär 348 meter över slätten.",
+			"factEn": "The rock rises about 348 metres above the plain."
+		},
+		"guesses": [
+			{
+				"playerId": "20000000-0000-4000-8000-000000000006",
+				"lat": -25.2444,
+				"lng": 131.1369,
+				"distanceKm": 14.990484181681072,
+				"rank": 1,
+				"isWinner": true,
+				"locked": false
+			},
+			{
+				"playerId": "20000000-0000-4000-8000-000000000005",
+				"lat": -23.3444,
+				"lng": 133.0369,
+				"distanceKm": 300.83757536115536,
+				"rank": 2,
+				"isWinner": false,
+				"locked": false
+			},
+			{
+				"playerId": "20000000-0000-4000-8000-000000000007",
+				"lat": -22.3444,
+				"lng": 134.0369,
+				"distanceKm": 452.0349719285866,
+				"rank": 3,
+				"isWinner": false,
+				"locked": false
+			}
+		],
+		"noGuessPlayerIds": [],
+		"winnerPlayerIds": [
+			"20000000-0000-4000-8000-000000000006"
+		],
+		"revealStartedAt": 1794855637500,
+		"answerVisibleAt": 1794855640500,
+		"skipped": false
+	},
+	"standings": [
+		{
+			"playerId": "20000000-0000-4000-8000-000000000006",
+			"nickname": "Björn",
+			"color": "#2debf9",
+			"rank": 1,
+			"roundsWon": 1,
+			"totalDistanceKm": 279.5661719821585,
+			"guessedRounds": 2,
+			"connected": true
+		},
+		{
+			"playerId": "20000000-0000-4000-8000-000000000005",
+			"nickname": "Åsa",
+			"color": "#e6424a",
+			"rank": 1,
+			"roundsWon": 1,
+			"totalDistanceKm": 314.14385143261785,
+			"guessedRounds": 2,
+			"connected": true
+		},
+		{
+			"playerId": "20000000-0000-4000-8000-000000000007",
+			"nickname": "Cia",
+			"color": "#0867a9",
+			"rank": 3,
+			"roundsWon": 0,
+			"totalDistanceKm": 847.6490678685236,
+			"guessedRounds": 2,
+			"connected": true
+		}
+	],
+	"next": {
+		"kind": "suddenDeath",
+		"eligiblePlayerIds": [
+			"20000000-0000-4000-8000-000000000006",
+			"20000000-0000-4000-8000-000000000005"
+		]
+	}
+}

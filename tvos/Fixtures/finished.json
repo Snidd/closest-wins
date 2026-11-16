@@ -1,0 +1,98 @@
+{
+	"serverNow": 1794855634500,
+	"game": {
+		"id": "10000000-0000-4000-8000-000000000001",
+		"joinCode": "KDRW",
+		"joinUrl": "http://192.168.1.20:5173/join/KDRW",
+		"language": "en",
+		"playlistName": {
+			"nameSv": "Kända landmärken",
+			"nameEn": "Famous landmarks"
+		},
+		"timerSeconds": 30,
+		"totalRounds": 3
+	},
+	"players": [
+		{
+			"id": "20000000-0000-4000-8000-000000000001",
+			"nickname": "Alice",
+			"color": "#e6424a",
+			"connected": true,
+			"lateJoiner": false
+		},
+		{
+			"id": "20000000-0000-4000-8000-000000000002",
+			"nickname": "Bob",
+			"color": "#2debf9",
+			"connected": true,
+			"lateJoiner": false
+		},
+		{
+			"id": "20000000-0000-4000-8000-000000000003",
+			"nickname": "Cleo",
+			"color": "#0867a9",
+			"connected": false,
+			"lateJoiner": false
+		},
+		{
+			"id": "20000000-0000-4000-8000-000000000004",
+			"nickname": "Dara",
+			"color": "#519c03",
+			"connected": true,
+			"lateJoiner": true
+		}
+	],
+	"role": "tv",
+	"status": "paired",
+	"phase": "finished",
+	"standings": [
+		{
+			"playerId": "20000000-0000-4000-8000-000000000001",
+			"nickname": "Alice",
+			"color": "#e6424a",
+			"rank": 1,
+			"roundsWon": 2,
+			"totalDistanceKm": 536.2581325213087,
+			"guessedRounds": 3,
+			"connected": true
+		},
+		{
+			"playerId": "20000000-0000-4000-8000-000000000002",
+			"nickname": "Bob",
+			"color": "#2debf9",
+			"rank": 2,
+			"roundsWon": 1,
+			"totalDistanceKm": 1289.8180404947746,
+			"guessedRounds": 3,
+			"connected": true
+		},
+		{
+			"playerId": "20000000-0000-4000-8000-000000000004",
+			"nickname": "Dara",
+			"color": "#519c03",
+			"rank": 3,
+			"roundsWon": 0,
+			"totalDistanceKm": 155.351686074086,
+			"guessedRounds": 1,
+			"connected": true
+		},
+		{
+			"playerId": "20000000-0000-4000-8000-000000000003",
+			"nickname": "Cleo",
+			"color": "#0867a9",
+			"rank": 3,
+			"roundsWon": 0,
+			"totalDistanceKm": 0,
+			"guessedRounds": 0,
+			"connected": false
+		}
+	],
+	"winnerPlayerIds": [
+		"20000000-0000-4000-8000-000000000001"
+	],
+	"endedEarly": false,
+	"nextPairing": {
+		"pairingCode": "730164",
+		"codeExpiresAt": 1794856234500
+	}
+}

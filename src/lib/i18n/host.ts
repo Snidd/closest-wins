@@ -78,6 +78,7 @@ export const host = defineDict({
 		// --- Lobby ------------------------------------------------------------------------------
 		tvTitle: 'Big screen',
 		tvStep1: 'On the TV or laptop, open',
+		tvStep1AppleTv: 'or the Closest Wins app on an Apple TV',
 		tvStep2: 'Type the 6-digit code it shows:',
 		pairingCode: 'Pairing code',
 		pair: 'Connect',
@@ -252,6 +253,7 @@ export const host = defineDict({
 
 		tvTitle: 'Storskärm',
 		tvStep1: 'Öppna på tv:n eller datorn',
+		tvStep1AppleTv: 'eller appen Närmast vinner på en Apple TV',
 		tvStep2: 'Skriv in den sexsiffriga koden som visas:',
 		pairingCode: 'Parkod',
 		pair: 'Anslut',

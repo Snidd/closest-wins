@@ -1,6 +1,7 @@
 /**
  * Simulated players and TV screens (no UI): they join, keep a live stream open (so they count
- * as connected), guess and pair through the real remote functions over HTTP.
+ * as connected), guess and pair through the real remote functions over HTTP. `NativeTv` is the
+ * Apple TV app's client instead: plain JSON endpoints and a bearer token.
  */
 import type { PlayerStateValue, TvStateValue } from '../../src/lib/game/types.ts';
 import { expectRedirect, tokenHash } from './admin.ts';
@@ -110,5 +111,130 @@ export class SimTv extends Device {
 	override disconnect() {
 		super.disconnect();
 		this.live = null;
+	}
+}
+
+/** One event of the native TV stream: the raw JSON line and its parsed value. */
+export interface NativeEvent {
+	raw: string;
+	value: TvStateValue;
+}
+
+/** An open `/tv/native/stream`: every event in order, and when the server ended it. */
+export interface NativeStream {
+	response: Response;
+	events: NativeEvent[];
+	/** Resolves when the server closes the stream (not on `close()`). */
+	ended: Promise<void>;
+	/** The latest event if it matches `pred`, otherwise the next one that does. */
+	next(pred?: (v: TvStateValue) => boolean, timeoutMs?: number): Promise<NativeEvent>;
+	close(): void;
+}
+
+/**
+ * The Apple TV app's side of the server, as plain HTTP + JSON (`/tv/native/register`,
+ * `/tv/native/stream`): no cookies, no `Origin` header, no remote-function protocol.
+ */
+export class NativeTv {
+	readonly baseURL: string;
+	token: string | null = null;
+	tvId = '';
+	private streams = new Set<AbortController>();
+
+	constructor(baseURL: string = BASE_URL) {
+		this.baseURL = baseURL.replace(/\/$/, '');
+	}
+
+	private auth(token = this.token): Record<string, string> {
+		return token ? { authorization: `Bearer ${token}` } : {};
+	}
+
+	/** POST /tv/native/register (with the stored bearer token, if any); keeps a newly minted token. */
+	async register(): Promise<{ tvId: string; token: string | null }> {
+		const res = await fetch(`${this.baseURL}/tv/native/register`, {
+			method: 'POST',
+			headers: { 'content-type': 'application/json', ...this.auth() },
+			body: '{}'
+		});
+		if (!res.ok) throw new Error(`register: ${res.status} ${await res.text()}`);
+		const body = (await res.json()) as { tvId: string; token: string | null };
+		this.tvId = body.tvId;
+		if (body.token) this.token = body.token;
+		return body;
+	}
+
+	/** GET /tv/native/stream with `token` (default: the stored one; `null` sends no header). */
+	async stream(token: string | null = this.token): Promise<NativeStream> {
+		const controller = new AbortController();
+		this.streams.add(controller);
+		const response = await fetch(`${this.baseURL}/tv/native/stream`, {
+			headers: { accept: 'text/event-stream', ...this.auth(token) },
+			signal: controller.signal
+		});
+		if (!response.ok || !response.body) throw new Error(`stream: ${response.status}`);
+		const events: NativeEvent[] = [];
+		const waiters = new Set<{ pred: (v: TvStateValue) => boolean; resolve: (e: NativeEvent) => void }>();
+		const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+		const ended = (async () => {
+			let buffer = '';
+			for (;;) {
+				const { value, done } = await reader.read();
+				if (done) return;
+				buffer += value;
+				let idx: number;
+				while ((idx = buffer.indexOf('\n\n')) >= 0) {
+					const chunk = buffer.slice(0, idx);
+					buffer = buffer.slice(idx + 2);
+					const raw = chunk
+						.split('\n')
+						.filter((l) => l.startsWith('data: '))
+						.map((l) => l.slice(6))
+						.join('\n');
+					if (!raw) continue; // keep-alive comment
+					const event = { raw, value: JSON.parse(raw) as TvStateValue };
+					events.push(event);
+					for (const w of [...waiters]) {
+						if (w.pred(event.value)) {
+							waiters.delete(w);
+							w.resolve(event);
+						}
+					}
+				}
+			}
+		})();
+		ended.catch(() => {}); // aborted by close()
+
+		return {
+			response,
+			events,
+			ended,
+			next: (pred = () => true, timeoutMs = 15_000) => {
+				const latest = events.at(-1);
+				if (latest && pred(latest.value)) return Promise.resolve(latest);
+				return new Promise<NativeEvent>((resolve, reject) => {
+					const w = { pred, resolve };
+					waiters.add(w);
+					setTimeout(() => {
+						if (waiters.delete(w)) {
+							reject(new Error(`timed out waiting on the native stream; latest: ${events.at(-1)?.raw.slice(0, 300)}`));
+						}
+					}, timeoutMs);
+				});
+			},
+			close: () => {
+				controller.abort();
+				this.streams.delete(controller);
+			}
+		};
+	}
+
+	/** `tv_screen.token_hash` of this screen (for cleanup). */
+	tokenHash(): string | null {
+		return this.token ? tokenHash(this.token) : null;
+	}
+
+	disconnect() {
+		for (const c of this.streams) c.abort();
+		this.streams.clear();
 	}
 }

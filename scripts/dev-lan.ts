@@ -7,6 +7,8 @@
  *   PORT=5180 pnpm dev:lan
  *
  * Phones must be on the same network (and the host firewall must allow the port).
+ * It also advertises the server over Bonjour (MDNS_ADVERTISE=1, opt out with MDNS_ADVERTISE=0)
+ * so the Apple TV app finds it; that needs UDP 5353 open in the host firewall.
  */
 import { spawn } from 'node:child_process';
 import { networkInterfaces } from 'node:os';
@@ -37,7 +39,7 @@ console.log(`  Big screen: ${origin}/tv   Host: ${origin}/host   (phones join vi
 
 const child = spawn('pnpm', ['exec', 'vite', 'dev', '--host', '0.0.0.0', '--port', port, '--strictPort'], {
 	stdio: 'inherit',
-	env: { ...process.env, ORIGIN: origin }
+	env: { ...process.env, ORIGIN: origin, MDNS_ADVERTISE: process.env.MDNS_ADVERTISE ?? '1' }
 });
 const forward = (sig: NodeJS.Signals) => child.kill(sig);
 process.on('SIGINT', forward);

@@ -1,0 +1,60 @@
+{
+	"serverNow": 1794855643500,
+	"game": {
+		"id": "10000000-0000-4000-8000-000000000002",
+		"joinCode": "HMPT",
+		"joinUrl": "http://192.168.1.20:5173/join/HMPT",
+		"language": "sv",
+		"playlistName": {
+			"nameSv": "Kända landmärken",
+			"nameEn": "Famous landmarks"
+		},
+		"timerSeconds": 30,
+		"totalRounds": 2
+	},
+	"players": [
+		{
+			"id": "20000000-0000-4000-8000-000000000005",
+			"nickname": "Åsa",
+			"color": "#e6424a",
+			"connected": true,
+			"lateJoiner": false
+		},
+		{
+			"id": "20000000-0000-4000-8000-000000000006",
+			"nickname": "Björn",
+			"color": "#2debf9",
+			"connected": true,
+			"lateJoiner": false
+		},
+		{
+			"id": "20000000-0000-4000-8000-000000000007",
+			"nickname": "Cia",
+			"color": "#0867a9",
+			"connected": true,
+			"lateJoiner": false
+		}
+	],
+	"role": "tv",
+	"status": "paired",
+	"phase": "round",
+	"round": {
+		"index": 2,
+		"number": 1,
+		"isSuddenDeath": true,
+		"eligiblePlayerIds": [
+			"20000000-0000-4000-8000-000000000006",
+			"20000000-0000-4000-8000-000000000005"
+		],
+		"startedAt": 1794855637500,
+		"endsAt": 1794855667500,
+		"clue": {
+			"textSv": "Ett platt berg ovanför en hamnstad.",
+			"textEn": "A flat-topped mountain above a harbour city.",
+			"photo": null
+		}
+	},
+	"lockedPlayerIds": [
+		"20000000-0000-4000-8000-000000000005"
+	]
+}

@@ -200,6 +200,7 @@ Caddy needs nothing special: `game.example.com { reverse_proxy 127.0.0.1:3000 }`
 | `PROTOCOL_HEADER`, `HOST_HEADER` | rarely | – | Only if you cannot set `ORIGIN` |
 | `SHUTDOWN_TIMEOUT` | no | `30` (`10` in Docker) | Seconds to wait for ordinary requests on shutdown |
 | `DEV_PAGES` | no | off | `1` serves the `/dev/*` map playground in a production build (tests) |
+| `MDNS_ADVERTISE` | no | off (on in `pnpm dev:lan`) | `1` advertises `_closestwins._tcp` over Bonjour so the Apple TV app finds the server; needs UDP 5353 open in the firewall, and `network_mode: host` in Docker |
 
 ## Project layout
 

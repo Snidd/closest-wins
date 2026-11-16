@@ -36,6 +36,11 @@ services:
       XFF_DEPTH: ${XFF_DEPTH:-1}
       # Live streams end at once on SIGTERM; this only bounds slow ordinary requests.
       SHUTDOWN_TIMEOUT: ${SHUTDOWN_TIMEOUT:-10}
+      # Bonjour advertisement for the Apple TV app (1 = on). Multicast does not cross Docker's
+      # bridge network: it needs `network_mode: host` on this service (then `ports:` is ignored,
+      # the app listens on 3000, ORIGIN must use that port, and DATABASE_URL must reach the db
+      # through a published port) and UDP 5353 open in the host firewall.
+      MDNS_ADVERTISE: ${MDNS_ADVERTISE:-}
     volumes:
       - data:/data
     stop_grace_period: 15s

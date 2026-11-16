@@ -21,6 +21,8 @@
 		"test": "pnpm test:unit && pnpm test:e2e",
 		"seed": "node --env-file-if-exists=.env scripts/seed.ts",
 		"migrate": "node --env-file-if-exists=.env scripts/migrate.ts",
+		"tvos:export": "node scripts/export-tvos.ts",
+		"tvos:fixtures": "TVOS_FIXTURES=1 vitest run src/lib/server/game/tvos-fixtures.test.ts",
 		"db:start": "docker compose up -d db",
 		"db:stop": "docker compose stop db",
 		"db:push": "drizzle-kit push",
@@ -47,6 +49,7 @@
 	},
 	"dependencies": {
 		"@modelcontextprotocol/sdk": "^1.32.2",
+		"bonjour-service": "^1.4.4",
 		"drizzle-orm": "^0.45.2",
 		"postgres": "^3.4.9",
 		"qrcode": "^1.5.4",
