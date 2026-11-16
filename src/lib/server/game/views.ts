@@ -14,11 +14,11 @@
  */
 import { and, desc, eq, isNotNull } from 'drizzle-orm';
 import { ORIGIN } from '$app/env/private';
+import { revealSchedule } from '#lib/game/reveal.ts';
 import { db, type Executor } from '#lib/server/db/index.ts';
 import { game, guess, tvScreen, type Game, type GameRound, type Player, type TvScreen } from '#lib/server/db/schema.ts';
 import {
 	MAX_PLAYERS,
-	REVEAL_SUSPENSE_MS,
 	type ActiveRound,
 	type BilingualName,
 	type GameInfo,
@@ -111,6 +111,17 @@ async function buildResult(
 		.sort((a, b) => a.distanceKm! - b.distanceKm! || (a.playerId < b.playerId ? -1 : 1));
 	const ranks = competitionRanks(counted.map((r) => r.distanceKm!));
 	const winners = round.winnerPlayerIds.filter((id) => active.has(id));
+	const endedAt = round.endedAt!.getTime();
+	const revealStartedAt = g.revealStartedAt?.getTime() ?? endedAt;
+	const skippedAt = g.revealSkippedAt?.getTime() ?? null;
+	const schedule = revealSchedule(
+		revealStartedAt,
+		counted.map((r) => r.playerId),
+		round.id
+	);
+	// A skip ends the build-up at once: nothing is scheduled after it.
+	const answerVisibleAt =
+		skippedAt === null ? schedule.answerVisibleAt : Math.min(schedule.answerVisibleAt, skippedAt);
 	const guesses: RevealGuess[] = counted.map((r, i) => ({
 		playerId: r.playerId,
 		lat: r.lat,
@@ -118,12 +129,10 @@ async function buildResult(
 		distanceKm: r.distanceKm!,
 		rank: ranks[i]!,
 		isWinner: winners.includes(r.playerId),
-		locked: r.lockedAt !== null
+		locked: r.lockedAt !== null,
+		revealAt: Math.min(schedule.revealAt[i]!, answerVisibleAt)
 	}));
 	const guessed = new Set(counted.map((r) => r.playerId));
-	const endedAt = round.endedAt!.getTime();
-	const revealStartedAt = g.revealStartedAt?.getTime() ?? endedAt;
-	const skippedAt = g.revealSkippedAt?.getTime() ?? null;
 	return {
 		round: {
 			index: round.index,
@@ -139,10 +148,7 @@ async function buildResult(
 		noGuessPlayerIds: eligibleIds(round, players).filter((id) => !guessed.has(id)),
 		winnerPlayerIds: winners,
 		revealStartedAt,
-		answerVisibleAt:
-			skippedAt === null
-				? revealStartedAt + REVEAL_SUSPENSE_MS
-				: Math.min(revealStartedAt + REVEAL_SUSPENSE_MS, skippedAt),
+		answerVisibleAt,
 		skipped: skippedAt !== null
 	};
 }

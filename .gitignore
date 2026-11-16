@@ -27,3 +27,10 @@ test-results
 
 # App data (media uploads, map tiles)
 /data
+
+# Apple TV app: the Xcode project is generated from tvos/project.yml (xcodegen)
+/tvos/*.xcodeproj
+/tvos/Local.xcconfig
+/tvos/Core/.build
+/tvos/build
+xcuserdata

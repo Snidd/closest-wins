@@ -52,7 +52,8 @@ const g = (playerId: string, lat: number, lng: number, distanceKm: number, rank:
 	distanceKm,
 	rank,
 	isWinner: rank === 1,
-	locked: true
+	locked: true,
+	revealAt: T0
 });
 
 describe('framing', () => {

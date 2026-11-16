@@ -78,6 +78,7 @@ src/hooks.server.ts           locals.admin, locals.locale, <html lang/data-surfa
 src/app.css                   design tokens (colours, spacing, type, player colours), base + surface styles
 src/lib/game/types.ts         SHARED CONTRACT: phases, Player/Host/Tv snapshots, command valibot schemas
 src/lib/game/clock.ts         clockOffset / remainingMs for countdowns
+src/lib/game/reveal.ts        revealSchedule: when each guess appears in a reveal, and the answer after
 src/lib/geo.ts                haversineKm, normalizeLng (client + server)
 src/lib/i18n/                 defineDict, useT, localized(); one dictionary per surface:
                               common.ts (shared) · player.ts · host.ts · tv.ts · admin.ts
@@ -101,6 +102,12 @@ drizzle/                      generated SQL migrations (committed)
 src/lib/surface.ts            route → <html data-surface> + viewport (server hook and root layout)
 e2e/                          playwright tests; e2e/helpers/ is the one shared helper library
                               (remote-function client, db fixtures, simulated players/TV, phones)
+tvos/                         Apple TV app (SwiftUI, tvOS 17+), the native twin of /tv:
+  project.yml                 XcodeGen input; the .xcodeproj is generated, not committed
+  Core/                       Swift package: snapshot model, TvClient, strings, distance format,
+                              reveal timing and geometry; `cd tvos/Core && swift test`
+  ClosestWins/                the app: AppModel, Screens/ (one per web TV screen), Views/
+  ClosestWins/Resources/shared.json, Fixtures/   generated (pnpm tvos:export / tvos:fixtures)
 data/                         runtime data (gitignored): media/, map/world.pmtiles
 Dockerfile, compose.prod.yaml production image and stack (see README)
 ```

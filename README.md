@@ -84,6 +84,37 @@ the join URL and the QR code are built from. (Doing it by hand: `ORIGIN=http://<
 pnpm dev --host`.) Phones must be on the same Wi-Fi and the port must be open in your firewall.
 For a real party the production build is smoother: see *Deployment*.
 
+### Apple TV
+
+An Apple TV has no browser, so the big screen there is a small native app in `tvos/` that shows
+the same screens as `/tv`. It finds the server over Bonjour (the server must run with
+`MDNS_ADVERTISE=1`; `pnpm dev:lan` turns it on), or you type the address once with the remote.
+The reveal map comes from Apple (MapKit), so it looks different from the web one and the Apple TV
+needs the internet.
+
+Building it needs a Mac with Xcode (with the tvOS platform) and `brew install xcodegen`:
+
+```sh
+cd tvos && xcodegen && open ClosestWins.xcodeproj
+```
+
+- **Simulator:** pick an Apple TV simulator and press Run.
+- **A real Apple TV** (a free Apple ID is enough):
+  1. Xcode > Settings > Accounts: add your Apple ID.
+  2. On the Apple TV, open Settings > Remotes and Devices > Remote App and Devices; in Xcode,
+     Window > Devices and Simulators, select the Apple TV and pair it with the code it shows.
+     Then turn on Settings > Privacy & Security > Developer Mode on the Apple TV.
+  3. Create `tvos/Local.xcconfig` with your team and a bundle identifier of your own (see
+     `tvos/Config.xcconfig`), and run `xcodegen` again.
+  4. Pick the Apple TV as the run destination and press Run. Allow the local network prompt on
+     first launch.
+- With a free Apple ID the app stops opening after 7 days: run it from Xcode again. The server
+  address and the screen's registration survive.
+
+`cd tvos/Core && swift test` runs the app's logic tests on the Mac. `pnpm tvos:export` and
+`pnpm tvos:fixtures` regenerate the files the app shares with the web (`shared.json`, the
+snapshot fixtures) after changing strings or snapshots.
+
 ## Content and admin
 
 `/admin` (same password) manages:
@@ -218,6 +249,7 @@ src/lib/i18n/          Swedish/English dictionaries per surface
 scripts/               seed, migrate, map download, dev:lan
 drizzle/               SQL migrations
 e2e/                   Playwright tests and their helpers (e2e/helpers/)
+tvos/                  the Apple TV app (SwiftUI); tvos/Core is its logic as a Swift package
 INTEND.md              what the game is meant to be; CLAUDE.md: notes for coding agents
 ```
 

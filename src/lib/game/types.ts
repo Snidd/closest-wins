@@ -45,8 +45,6 @@ export const PAIRING_CODE_TTL_MS = 10 * 60 * 1000;
 export const TIMER_MIN_SECONDS = 5;
 export const TIMER_MAX_SECONDS = 600;
 export const MAX_ROUNDS = 100;
-/** Suggested suspense before the TV flies to the answer; `answerVisibleAt` derives from it. */
-export const REVEAL_SUSPENSE_MS = 3000;
 
 /** WebP variants stored for every photo, by longest-edge width in pixels. */
 export const PHOTO_SIZES = { sm: 480, md: 1024, lg: 1920 } as const;
@@ -210,6 +208,11 @@ export interface RevealGuess {
 	isWinner: boolean;
 	/** Locked in explicitly (false: position under the cross when time ran out). */
 	locked: boolean;
+	/**
+	 * Server time the big screen shows this guess: one by one in a mixed order, all before
+	 * `answerVisibleAt` (see `revealSchedule` in `reveal.ts`).
+	 */
+	revealAt: EpochMs;
 }
 
 export interface RoundResult {

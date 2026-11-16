@@ -1,0 +1,11 @@
+// Signing. To install on a real Apple TV, create `Local.xcconfig` next to this file (it is not
+// committed) with your own values:
+//
+//   DEVELOPMENT_TEAM = ABCDE12345
+//   PRODUCT_BUNDLE_IDENTIFIER = com.yourname.closestwins
+//
+// The simulator needs neither.
+PRODUCT_BUNDLE_IDENTIFIER = com.example.closestwins
+DEVELOPMENT_TEAM =
+
+#include? "Local.xcconfig"

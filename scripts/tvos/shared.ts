@@ -28,15 +28,14 @@ import {
 	MAX_PLAYERS,
 	PAIRING_CODE_LENGTH,
 	PAIRING_CODE_TTL_MS,
-	PHOTO_SIZES,
-	REVEAL_SUSPENSE_MS
+	PHOTO_SIZES
 } from '../../src/lib/game/types.ts';
 
 /**
  * Format version of shared.json. Bump it when the structure changes in a way an existing Swift
  * reader would misread (renamed or retyped fields); adding keys does not need a bump.
  */
-export const SHARED_VERSION = 1;
+export const SHARED_VERSION = 2;
 
 /** Repo-relative path of the generated file. */
 export const SHARED_JSON_PATH = 'tvos/ClosestWins/Resources/shared.json';
@@ -214,7 +213,6 @@ export function buildShared() {
 		playerColors: PLAYER_COLORS.map((hex) => ({ hex, text: textColorOn(hex) })),
 		reveal: {
 			stages: [...REVEAL_STAGES],
-			suspenseMs: REVEAL_SUSPENSE_MS,
 			flyMs: REVEAL_FLY_MS,
 			linesMs: REVEAL_LINES_MS
 		},

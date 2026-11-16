@@ -1,6 +1,7 @@
 /** Fake players and round results for the /dev/map playground. */
 import { haversineKm, normalizeLng } from '#lib/geo.ts';
-import { REVEAL_SUSPENSE_MS, type PlayerSummary, type RevealGuess, type RoundResult } from '#lib/game/types.ts';
+import { revealSchedule } from '#lib/game/reveal.ts';
+import { type PlayerSummary, type RevealGuess, type RoundResult } from '#lib/game/types.ts';
 import { PLAYER_COLORS } from '#lib/ui/colors.ts';
 
 const NAMES = [
@@ -49,7 +50,7 @@ export function fakeResult(
 	const target = TARGETS[targetKey];
 	const rand = rng(opts.seed ?? 7);
 	const noGuess: string[] = [];
-	const raw: Array<Omit<RevealGuess, 'rank' | 'isWinner'>> = [];
+	const raw: Array<Omit<RevealGuess, 'rank' | 'isWinner' | 'revealAt'>> = [];
 	for (const p of players) {
 		if (rand() < 0.08 && players.length > 3) {
 			noGuess.push(p.id);
@@ -65,10 +66,17 @@ export function fakeResult(
 		raw.push({ playerId: p.id, lat, lng, distanceKm: haversineKm({ lat, lng }, target), locked: rand() > 0.2 });
 	}
 	raw.sort((a, b) => a.distanceKm - b.distanceKm);
-	const guesses: RevealGuess[] = raw.map((g) => ({
+	const schedule = revealSchedule(
+		serverNow,
+		raw.map((g) => g.playerId),
+		'fake-round'
+	);
+	const answerVisibleAt = opts.skipped ? serverNow : schedule.answerVisibleAt;
+	const guesses: RevealGuess[] = raw.map((g, i) => ({
 		...g,
 		rank: raw.findIndex((x) => x.distanceKm === g.distanceKm) + 1,
-		isWinner: g.distanceKm === raw[0]?.distanceKm
+		isWinner: g.distanceKm === raw[0]?.distanceKm,
+		revealAt: Math.min(schedule.revealAt[i]!, answerVisibleAt)
 	}));
 	return {
 		round: {
@@ -92,7 +100,7 @@ export function fakeResult(
 		noGuessPlayerIds: noGuess,
 		winnerPlayerIds: guesses.filter((g) => g.isWinner).map((g) => g.playerId),
 		revealStartedAt: serverNow,
-		answerVisibleAt: opts.skipped ? serverNow : serverNow + REVEAL_SUSPENSE_MS,
+		answerVisibleAt,
 		skipped: opts.skipped ?? false
 	};
 }

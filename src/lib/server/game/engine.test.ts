@@ -7,11 +7,11 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 import { and, eq } from 'drizzle-orm';
 import { client, db } from '#lib/server/db/index.ts';
 import { game, gameRound, guess, player } from '#lib/server/db/schema.ts';
+import { REVEAL_HOLD_MS, REVEAL_PIN_STEP_MS } from '#lib/game/reveal.ts';
 import {
 	expectedStateOf,
 	MAX_PLAYERS,
 	PAIRING_CODE_TTL_MS,
-	REVEAL_SUSPENSE_MS,
 	type ExpectedState,
 	type HostSnapshot
 } from '#lib/game/types.ts';
@@ -174,7 +174,13 @@ describe('a full game', () => {
 			[b.playerId, 2, false, false]
 		]);
 		expect(host.result.guesses[0]!.distanceKm).toBeCloseTo(haversineKm(near(l0!, 0.5), l0!), 6);
-		expect(host.result.answerVisibleAt).toBe(host.result.revealStartedAt + REVEAL_SUSPENSE_MS);
+		// Two guesses: one pin per step, then the hold.
+		expect(host.result.answerVisibleAt).toBe(host.result.revealStartedAt + 2 * REVEAL_PIN_STEP_MS + REVEAL_HOLD_MS);
+		const { revealStartedAt } = host.result;
+		expect(host.result.guesses.map((g) => g.revealAt - revealStartedAt).sort((x, y) => x - y)).toEqual([
+			REVEAL_PIN_STEP_MS,
+			2 * REVEAL_PIN_STEP_MS
+		]);
 		expect(host.standings.map((s) => [s.playerId, s.roundsWon])).toEqual([
 			[a.playerId, 1],
 			[b.playerId, 0]

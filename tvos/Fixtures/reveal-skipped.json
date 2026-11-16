@@ -79,7 +79,8 @@
 				"distanceKm": 180.24687922324094,
 				"rank": 1,
 				"isWinner": true,
-				"locked": true
+				"locked": true,
+				"revealAt": 1794855622500
 			},
 			{
 				"playerId": "20000000-0000-4000-8000-000000000001",
@@ -88,7 +89,8 @@
 				"distanceKm": 452.0349719285866,
 				"rank": 2,
 				"isWinner": false,
-				"locked": false
+				"locked": false,
+				"revealAt": 1794855622500
 			}
 		],
 		"noGuessPlayerIds": [

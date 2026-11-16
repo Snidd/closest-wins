@@ -68,6 +68,8 @@
 		attributionPosition?: Corner;
 		/** Fires on every stage change (also the first one after mount). */
 		onstage?: (stage: RevealStage) => void;
+		/** How many guesses are on the map so far (they appear one by one in the `pins` stage). */
+		pinsShown?: number;
 		class?: string;
 	};
 
@@ -82,6 +84,7 @@
 		theme: themeProp = 'auto',
 		attributionPosition = 'bottom-right',
 		onstage,
+		pinsShown = $bindable(0),
 		class: className
 	}: Props = $props();
 
@@ -138,6 +141,16 @@
 	let remPx = 16;
 
 	const showDistances = $derived(stage === 'lines' || stage === 'done');
+	/**
+	 * Server time up to which guesses are on the map: each appears at its `revealAt` during the
+	 * `pins` stage. `Infinity` outside that stage (all shown).
+	 */
+	let pinsUntil = $state(Infinity);
+	/** Eased share (0..1) of each line drawn so far; the distances count up with it. */
+	let linesDrawn = $state(1);
+	$effect.pre(() => {
+		pinsShown = pins.filter((p) => p.revealAt <= pinsUntil).length;
+	});
 	const showTarget = $derived(stage === 'flying' || stage === 'lines' || stage === 'done');
 
 	function project(lng: number, lat: number, centerLng: number) {
@@ -262,9 +275,10 @@
 	const easeOut = (x: number) => 1 - (1 - x) ** 3;
 
 	function setLines(progress: number) {
+		const f = easeOut(Math.max(0, Math.min(1, progress)));
+		linesDrawn = f;
 		const src = map?.getSource(LINES_SOURCE) as { setData?: (d: unknown) => void } | undefined;
 		if (!src?.setData) return;
-		const f = easeOut(Math.max(0, Math.min(1, progress)));
 		src.setData({
 			type: 'FeatureCollection',
 			features:
@@ -398,8 +412,18 @@
 			} else if (tm.stage === 'lines') {
 				untrack(() => setLines(tm.progress));
 			}
+			pinsUntil = tm.stage === 'pins' ? now : Infinity;
 			if (tm.stage === 'lines') raf = requestAnimationFrame(step);
-			else if (tm.stage !== 'done') timer = setTimeout(step, Math.min(250, Math.max(16, tm.endsAt - now)));
+			else if (tm.stage !== 'done') {
+				// Wake for the stage boundary, and in `pins` for the next guess to appear.
+				let wakeAt = tm.endsAt;
+				if (tm.stage === 'pins') {
+					for (const g of untrack(() => result.guesses)) {
+						if (g.revealAt > now && g.revealAt < wakeAt) wakeAt = g.revealAt;
+					}
+				}
+				timer = setTimeout(step, Math.min(250, Math.max(16, wakeAt - now)));
+			}
 		};
 		step();
 		return () => {
@@ -533,6 +557,7 @@
 						class={[
 							'pin',
 							{
+								pending: pin.revealAt > pinsUntil,
 								winner: showDistances && pin.isWinner,
 								me: pin.playerId === highlightPlayerId,
 								dim: stage === 'done' && !pin.isWinner
@@ -554,7 +579,15 @@
 								</svg>
 							{/if}
 							<span class="name">{pin.nickname}</span>
-							{#if showDistances}<span class="dist">{t().km(pin.distanceKm)}</span>{/if}
+							{#if stage === 'lines'}
+								<!-- Counts up with the line; the hidden final text keeps the label's size. -->
+								<span class="dist counting">
+									<span class="final">{t().km(pin.distanceKm)}</span>
+									<span class="now">{t().km(pin.distanceKm * linesDrawn)}</span>
+								</span>
+							{:else if showDistances}
+								<span class="dist">{t().km(pin.distanceKm)}</span>
+							{/if}
 						</span>
 						</span>
 					</div>
@@ -613,6 +646,12 @@
 		position: absolute;
 		left: 0;
 		top: 0;
+	}
+	/* Not on the map yet (its turn comes during the `pins` stage); it pops in when it is. */
+	.pin.pending {
+		visibility: hidden;
+	}
+	.pin:not(.pending) .body {
 		animation: pin-in 420ms var(--ease-out) both;
 	}
 	.dot {
@@ -655,6 +694,17 @@
 		font-weight: var(--weight-medium);
 		font-variant-numeric: tabular-nums;
 		opacity: 0.8;
+	}
+	.dist.counting {
+		position: relative;
+	}
+	.dist.counting .final {
+		visibility: hidden;
+	}
+	.dist.counting .now {
+		position: absolute;
+		right: 0;
+		top: 0;
 	}
 	.name {
 		max-width: 10em;

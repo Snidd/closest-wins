@@ -87,6 +87,8 @@
 	const winners = $derived(result.winnerPlayerIds.map((id) => byId.get(id)).filter((p) => !!p));
 	const winnerKm = $derived(result.guesses.find((g) => g.isWinner)?.distanceKm ?? null);
 	const guessCount = $derived(result.guesses.length);
+	/** Guesses on the map so far: they appear one by one. */
+	let pinsShown = $state(0);
 	/** Rows that fit the panel (measured); the rest become "+ N more". */
 	let fit = $state(8);
 	let rowsEl = $state<HTMLOListElement>();
@@ -160,6 +162,7 @@
 			{padding}
 			attributionPosition="top-right"
 			onstage={(s) => (mapStage = s)}
+			bind:pinsShown
 		/>
 	</div>
 	<div class="shade" aria-hidden="true"></div>
@@ -173,7 +176,7 @@
 		<div class="suspense" data-testid="reveal-suspense">
 			{#if stage === 'pins'}
 				<p class="headline">{guessCount ? t().revealPins : t().noGuessesOnMap}</p>
-				<p class="sub">{t().guessCount(guessCount)}</p>
+				<p class="sub">{t().guessCount(pinsShown)}</p>
 				<span class="drum" style:--d="{suspenseMs}ms" style:--e="{-suspenseElapsed}ms"><i></i></span>
 			{:else}
 				<p class="headline flying">

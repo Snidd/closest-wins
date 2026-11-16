@@ -1,0 +1,54 @@
+# The Xcode project is generated from this file and not committed:
+#   cd tvos && xcodegen && open ClosestWins.xcodeproj
+name: ClosestWins
+options:
+  deploymentTarget:
+    tvOS: "17.0"
+  createIntermediateGroups: true
+configFiles:
+  Debug: Config.xcconfig
+  Release: Config.xcconfig
+packages:
+  ClosestWinsCore:
+    path: Core
+targets:
+  ClosestWins:
+    type: application
+    platform: tvOS
+    sources:
+      - path: ClosestWins
+      # The snapshot fixtures, for `-fixture <name>` (Debug builds only, see AppModel.swift).
+      - path: Fixtures
+        type: folder
+        buildPhase: resources
+    dependencies:
+      - package: ClosestWinsCore
+    info:
+      path: ClosestWins/Info.plist
+      properties:
+        CFBundleDisplayName: Closest Wins
+        UIUserInterfaceStyle: Dark
+        UIRequiredDeviceCapabilities: [arm64]
+        # The game server is on the home network over plain HTTP.
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
+        NSBonjourServices: [_closestwins._tcp]
+        NSLocalNetworkUsageDescription: Closest Wins looks for the game server on your network.
+    settings:
+      base:
+        SWIFT_VERSION: "6.0"
+        TARGETED_DEVICE_FAMILY: "3"
+        CURRENT_PROJECT_VERSION: "1"
+        MARKETING_VERSION: "1.0"
+        CODE_SIGN_STYLE: Automatic
+        ENABLE_USER_SCRIPT_SANDBOXING: YES
+      configs:
+        Release:
+          EXCLUDED_SOURCE_FILE_NAMES: Fixtures
+schemes:
+  ClosestWins:
+    build:
+      targets:
+        ClosestWins: all
+    run:
+      config: Debug

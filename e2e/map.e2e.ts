@@ -151,8 +151,14 @@ test('locked mode ignores drags and pinches', async ({ page }) => {
 test('RevealMap runs the stages and skip jumps to the end', async ({ page }) => {
 	await page.goto('/dev/map?view=reveal&n=40&theme=light');
 	await expect(page.getByTestId('stage')).toHaveText('pins', { timeout: 30_000 });
-	expect(await page.locator('.reveal-map .pin').count()).toBeGreaterThan(30);
-	await expect(page.getByTestId('stage')).toHaveText('flying', { timeout: 6000 });
+	const total = await page.locator('.reveal-map .pin').count();
+	expect(total).toBeGreaterThan(30);
+	// The guesses come one by one: not all at the start, all of them before the answer.
+	expect(await page.locator('.reveal-map .pin:not(.pending)').count()).toBeLessThan(total);
+	await expect(page.locator('.reveal-map .pin.pending')).toHaveCount(0, { timeout: 8000 });
+	await expect(page.getByTestId('stage')).toHaveText('pins');
+	// Many guesses take the longest the pins stage gets (6 s), then the hold (1.5 s).
+	await expect(page.getByTestId('stage')).toHaveText('flying', { timeout: 4000 });
 	await expect(page.locator('.reveal-map .target svg')).toBeVisible();
 	await expect(page.getByTestId('stage')).toHaveText('done', { timeout: 8000 });
 	await expect(page.locator('.reveal-map .pin.winner .label')).toBeVisible();

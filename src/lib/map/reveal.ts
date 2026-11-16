@@ -4,11 +4,11 @@
  *
  *   revealStartedAt ── pins ──▶ answerVisibleAt ── flying ──▶ +REVEAL_FLY_MS ── lines ──▶ +REVEAL_LINES_MS ── done
  *
- * - `pins`:   all guesses on the world view (suspense; `answerVisibleAt - revealStartedAt` is
- *             the server's REVEAL_SUSPENSE_MS).
+ * - `pins`:   the guesses appear on the world view one by one, each at its `revealAt`, then a
+ *             hold (the server's schedule: `revealSchedule` in `#lib/game/reveal.ts`).
  * - `flying`: the target marker drops in and the camera flies to frame it and the closest
  *             guesses. Phones may show the answer from here (`answerVisibleAt`).
- * - `lines`:  great-circle lines grow from each guess to the target, distances appear.
+ * - `lines`:  great-circle lines grow from each guess to the target, distances count up.
  * - `done`:   winner(s) highlighted; the page shows the location name and fact.
  *
  * `skipped` jumps straight to `done`.
