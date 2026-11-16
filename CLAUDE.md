@@ -8,6 +8,8 @@ Read `INTEND.md` (product + rules) and the approved plan before changing behavio
    appear in a `RoundResult`, which exists only in the `reveal` / `standings` snapshot variants
    (`src/lib/game/types.ts`; the `round` variant has `result?: never`). Do not even select those
    columns while a round is running. This applies to every role, including the host.
+   A photo's attribution and source URL count as the answer too (they often name the place):
+   a running round sends only the image (`CluePhotoView`); the credit appears from the reveal.
 2. **All content reads/writes go through `src/lib/server/content/`** (locations, playlists,
    photos). Admin remote functions and MCP tools both call it; validation lives once in
    `src/lib/content/schemas.ts`. Nothing else touches those tables, with one exception:
