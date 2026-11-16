@@ -10,5 +10,7 @@ shots
 .env
 .env.*
 !.env.example
+# The Apple TV app is built on a Mac, not in the image.
+tvos
 .claude
 *.log

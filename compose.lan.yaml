@@ -1,0 +1,94 @@
+# Home network stack in one step: the app, Postgres 18 and the world map, for a server on your
+# LAN (plain Docker or a Portainer stack), reached directly over plain HTTP or through a
+# reverse proxy with a local DNS name.
+#
+#   cp .env.lan.example .env.lan      # set ORIGIN to this server's address, and the secrets
+#   docker compose -f compose.lan.yaml --env-file .env.lan up -d --build
+#
+# Portainer: Stacks > Add stack > Repository (this repo, compose path `compose.lan.yaml`), and
+# enter the variables of .env.lan.example under "Environment variables".
+#
+# What differs from compose.prod.yaml:
+# - The app uses the host's network, so the Apple TV app finds it over Bonjour (multicast does
+#   not cross Docker's bridge network). Linux hosts only; needs UDP 5353 open in the firewall.
+#   It listens on APP_PORT directly, and reaches Postgres on the host's loopback (DB_PORT).
+# - The `map` service downloads the world map into the data volume on the first start and then
+#   exits (a few minutes, ~120 MB; the phones' map works once it is done). Later starts skip it.
+# - SEED_SAMPLE_CONTENT=1 adds the sample locations and playlists on start.
+name: closest-wins-lan
+
+services:
+  app:
+    build:
+      context: .
+      target: app
+    image: closest-wins:latest
+    restart: unless-stopped
+    network_mode: host
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PORT: ${APP_PORT:-3000}
+      # The address phones, the host and the TV open: http://<server-ip>:<APP_PORT>, or the
+      # https:// name of a reverse proxy in front (e.g. Nginx Proxy Manager). Join links and
+      # the QR code are built from it, and form posts are only accepted from it.
+      ORIGIN: ${ORIGIN:?set ORIGIN, e.g. http://192.168.1.50:3000 or https://game.example.com}
+      DATABASE_URL: postgres://${POSTGRES_USER:-closestwins}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@127.0.0.1:${DB_PORT:-5434}/${POSTGRES_DB:-closestwins}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD}
+      SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET (openssl rand -hex 32)}
+      MCP_TOKEN: ${MCP_TOKEN:?set MCP_TOKEN (openssl rand -hex 24)}
+      DATA_DIR: /data
+      # Photo uploads are up to 15 MB; adapter-node's default body limit is 512K.
+      BODY_SIZE_LIMIT: ${BODY_SIZE_LIMIT:-16M}
+      SHUTDOWN_TIMEOUT: ${SHUTDOWN_TIMEOUT:-10}
+      # Behind a reverse proxy: where the client address comes from (login/join rate limits).
+      ADDRESS_HEADER: ${ADDRESS_HEADER:-}
+      XFF_DEPTH: ${XFF_DEPTH:-1}
+      MDNS_ADVERTISE: ${MDNS_ADVERTISE:-1}
+      SEED_SAMPLE_CONTENT: ${SEED_SAMPLE_CONTENT:-0}
+    # Migrations, then (if asked for) the sample content, which is safe to apply again.
+    command:
+      - sh
+      - -c
+      - node scripts/migrate.ts && { [ "$$SEED_SAMPLE_CONTENT" != 1 ] || node scripts/seed.ts; } && exec node build
+    volumes:
+      - data:/data
+    stop_grace_period: 15s
+
+  db:
+    image: postgres:18
+    restart: unless-stopped
+    ports:
+      # Only on the host's loopback: for the app, not for the network.
+      - '127.0.0.1:${DB_PORT:-5434}:5432'
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-closestwins}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-closestwins}
+    volumes:
+      # Postgres 18 images keep their data in a versioned directory under /var/lib/postgresql.
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  # Runs once per start and exits: downloads the world map unless the volume already has it
+  # (scripts/fetch-map.sh; needs internet). FORCE=1 rebuilds it.
+  map:
+    build:
+      context: .
+      target: tools
+    image: closest-wins-tools:latest
+    restart: 'no'
+    environment:
+      DATA_DIR: /data
+      FORCE: ${MAP_FORCE:-0}
+    volumes:
+      - data:/data
+
+volumes:
+  pgdata:
+  data:

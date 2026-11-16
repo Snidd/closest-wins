@@ -110,6 +110,7 @@ tvos/                         Apple TV app (SwiftUI, tvOS 17+), the native twin 
   ClosestWins/Resources/shared.json, Fixtures/   generated (pnpm tvos:export / tvos:fixtures)
 data/                         runtime data (gitignored): media/, map/world.pmtiles
 Dockerfile, compose.prod.yaml production image and stack (see README)
+compose.lan.yaml              the same image for a home server / Portainer: host network, map download
 ```
 
 ## Conventions

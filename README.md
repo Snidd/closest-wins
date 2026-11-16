@@ -174,6 +174,42 @@ docker compose -f compose.prod.yaml --env-file .env.production up -d --build
   once and exits; phones, host and TV reconnect by themselves when it is back, and a running
   round keeps its deadline.
 
+### On a home server (one step, Portainer)
+
+`compose.lan.yaml` is the same image arranged for a server on your own network, over plain HTTP:
+
+```sh
+cp .env.lan.example .env.lan     # ORIGIN = the server's LAN address, plus the secrets
+docker compose -f compose.lan.yaml --env-file .env.lan up -d --build
+```
+
+In Portainer: Stacks > Add stack > Repository, compose path `compose.lan.yaml`, and the names
+from `.env.lan.example` as environment variables.
+
+- It starts the app, Postgres and a one-off `map` container that downloads the world map into
+  the data volume on the first start (a few minutes; phones show "map could not be loaded" until
+  it has finished) and then exits. That it shows as "exited" afterwards is normal.
+- `SEED_SAMPLE_CONTENT=1` adds the sample locations and playlists on start.
+- The app uses the host's network so the Apple TV app finds it over Bonjour. That needs a Linux
+  host and UDP 5353 open in its firewall; it listens on `APP_PORT` (3000) directly, and
+  Postgres is published on the server's loopback only (`DB_PORT`, 5434).
+- `ORIGIN` must be the address the phones open (`http://<server-ip>:3000`): give the server a
+  fixed address in your router.
+- **With a local DNS name and Nginx Proxy Manager** (e.g. `https://closestwins.example.com`):
+  set `ORIGIN` to that `https://` name and `ADDRESS_HEADER=X-Forwarded-For`. The proxy host
+  forwards to `http://<server-ip>:3000`, with this under *Advanced > Custom Nginx
+  Configuration* (live updates are long-lived event streams, uploads go up to 15 MB):
+
+  ```nginx
+  proxy_buffering off;
+  proxy_read_timeout 1h;
+  client_max_body_size 16m;
+  ```
+
+  Leave "Cache Assets" off. The certificate must be one the phones and the Apple TV trust
+  (e.g. Let's Encrypt through a DNS challenge); the Apple TV app gets the `https://` address
+  over Bonjour, or you type it in once.
+
 ### Behind a reverse proxy
 
 - Set `ORIGIN` to the public `https://` URL (cookies are then `Secure`; join links and the QR use
