@@ -246,6 +246,9 @@ test('standings and finished screens: own row, next step, winner, placement', as
 	await rival.lockIn(g.rounds[0]!.lat, g.rounds[0]!.lng);
 	await panMap(page);
 	await page.getByTestId('lock-in').tap();
+	// Let the lock-in land first (it ends the round by itself: the bot is not connected).
+	const me = await playerIdByNickname(g.id, name);
+	await expect.poll(async () => (await currentGuess(g.id, me))?.locked_at ?? null).not.toBeNull();
 	await h.endRoundNow(g.id).catch(() => {});
 	await h.skipReveal(g.id);
 	await expect(page.getByTestId('reveal-result')).toBeVisible();
