@@ -21,6 +21,9 @@
   - `getGuess()` returns the current cross position immediately and stops any running pan
     inertia, so the map does not drift away from the returned point.
   - Longitudes are normalised to [-180, 180]; latitudes stay within the Mercator range.
+  - Zoomed out, the map can be dragged up and down past the world's edge (empty ocean-coloured
+    space shows above or below), so the cross reaches any latitude; zoomed in, it stops at the
+    edge as before (`constrainCenterLat`).
   - Place overlay UI (clue panel, lock-in button) as positioned siblings, or pass them as
     children: they are rendered above the map in a layer that does not block the map.
 -->
@@ -36,6 +39,7 @@
 
 <script lang="ts">
 	import 'maplibre-gl/dist/maplibre-gl.css';
+	import type { LngLat, TransformConstrainFunction } from 'maplibre-gl';
 	import { untrack, type Snippet } from 'svelte';
 	import { clampLat, normalizeLng } from '#lib/geo.ts';
 	import { useT } from '#lib/i18n/context.ts';
@@ -56,7 +60,7 @@
 		MIN_ZOOM,
 		WORLD_VIEW
 	} from './config.ts';
-	import { worldFitZoom } from './geometry.ts';
+	import { constrainCenterLat, worldFitZoom } from './geometry.ts';
 	import MapChrome from './MapChrome.svelte';
 	import type { MapTheme } from './style.ts';
 	import { useMapTheme } from './theme.svelte.ts';
@@ -160,6 +164,18 @@
 		timer = setTimeout(flush, wait);
 	}
 
+	/**
+	 * Replaces MapLibre's default constraint (including its zoom clamp): the centre may leave
+	 * the world vertically while the world is about as short as the screen. MapLibre stays
+	 * lazily loaded, so the result reuses the class of the given LngLat.
+	 */
+	const constrain: TransformConstrainFunction = (lngLat, zoom) => {
+		const z = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoom));
+		const lat = constrainCenterLat(lngLat.lat, z, container?.clientHeight ?? 0);
+		const LngLatClass = lngLat.constructor as new (lng: number, lat: number) => LngLat;
+		return { center: new LngLatClass(lngLat.lng, lat), zoom: z };
+	};
+
 	function worldView() {
 		const width = container?.clientWidth ?? 0;
 		return {
@@ -195,7 +211,8 @@
 			scrollZoom: { around: 'center' },
 			touchZoomRotate: { around: 'center' },
 			keyboard: true,
-			clickTolerance: 4
+			clickTolerance: 4,
+			transformConstrain: constrain
 		})
 			.then((m) => {
 				if (cancelled) {

@@ -3,6 +3,7 @@
  * the /dev/map playground. Needs data/map/world.pmtiles (scripts/fetch-map.sh).
  */
 import { WEBGL_LAUNCH } from './helpers/env.ts';
+import { MERCATOR_MAX_LAT } from '../src/lib/geo.ts';
 import { devices, expect, test, type Page } from '@playwright/test';
 import sharp from 'sharp';
 
@@ -146,6 +147,55 @@ test('locked mode ignores drags and pinches', async ({ page }) => {
 	await page.waitForTimeout(GUESS_DEBOUNCE_WAIT);
 	expect(await readNow(page)).toEqual(lockedAt);
 	await expect(page.locator('.guess-map.locked')).toBeVisible();
+});
+
+async function canvasHasContent(page: Page) {
+	const png = await page.locator('.guess-map .canvas').screenshot();
+	const { channels } = await sharp(png).stats();
+	return Math.max(...channels.slice(0, 3).map((c) => c.stdev)) > 12;
+}
+
+test('zoomed out, vertical drags reach the far north and south but not past the Mercator limit', async ({ page }) => {
+	await page.goto('/dev/map?view=guess&theme=light&lat=0&lng=10&z=0');
+	await expect(page.locator('.guess-map')).toHaveAttribute('data-status', 'ready', { timeout: 30_000 });
+	const box = (await page.locator('.guess-map').boundingBox())!;
+	const x = box.x + box.width / 2;
+	const top = { x, y: box.y + 120 };
+	const bottom = { x, y: box.y + box.height - 120 };
+	const { gesture } = await touch(page);
+
+	// Finger moves down → the world moves down → the centre moves north (the old lock kept it at 0).
+	await gesture([top], [bottom]);
+	expect((await readNow(page)).lat).toBeGreaterThan(60);
+	for (let i = 0; i < 3; i++) {
+		await gesture([top], [bottom]);
+		expect((await readNow(page)).lat).toBeLessThanOrEqual(MERCATOR_MAX_LAT + 0.01);
+	}
+	expect(await canvasHasContent(page)).toBe(true);
+
+	await gesture([bottom], [top]);
+	await gesture([bottom], [top]);
+	expect((await readNow(page)).lat).toBeLessThan(-60);
+	for (let i = 0; i < 3; i++) {
+		await gesture([bottom], [top]);
+		expect((await readNow(page)).lat).toBeGreaterThanOrEqual(-MERCATOR_MAX_LAT - 0.01);
+	}
+	expect(await canvasHasContent(page)).toBe(true);
+});
+
+test('zoomed in, a downward drag stops when the top of the world reaches the top of the screen', async ({ page }) => {
+	await page.goto('/dev/map?view=guess&theme=light&lat=70&lng=10&z=4');
+	await expect(page.locator('.guess-map')).toHaveAttribute('data-status', 'ready', { timeout: 30_000 });
+	const box = (await page.locator('.guess-map').boundingBox())!;
+	const x = box.x + box.width / 2;
+	const { gesture } = await touch(page);
+	for (let i = 0; i < 6; i++) await gesture([{ x, y: box.y + 120 }], [{ x, y: box.y + box.height - 120 }]);
+	const now = await readNow(page);
+	// MapLibre's default: the centre's world-pixel y stays at least half the screen height from the top.
+	const W = 512 * 2 ** now.zoom;
+	const bound = (2 * Math.atan(Math.exp((0.5 - box.height / 2 / W) * 2 * Math.PI)) * 180) / Math.PI - 90;
+	expect(now.lat).toBeGreaterThan(80); // it did reach the edge
+	expect(now.lat).toBeLessThanOrEqual(bound + 0.01);
 });
 
 test('RevealMap runs the stages and skip jumps to the end', async ({ page }) => {
