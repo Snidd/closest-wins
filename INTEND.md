@@ -109,6 +109,8 @@ the answer **(assumed)**.
   one must be filled in; the other falls back to it.
 - Phones use their own device locale. The big screen uses the game language chosen by the host
   at creation, defaulting to the host phone's locale.
+- The native Apple TV app currently overrides the game language and always shows Swedish, behind
+  a build-time flag (`forcedLanguage`). The web big screen still follows the host's choice.
 
 ## Access
 

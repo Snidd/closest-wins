@@ -92,6 +92,10 @@ the same screens as `/tv`. It finds the server over Bonjour (the server must run
 The reveal map comes from Apple (MapKit), so it looks different from the web one and the Apple TV
 needs the internet.
 
+The app is currently always in Swedish, regardless of the game's language and the Apple TV's
+language. The flag is `AppModel.forcedLanguage` in `tvos/ClosestWins/AppModel.swift`; setting it
+to `nil` makes the app follow the game language like `/tv`.
+
 Building it needs a Mac with Xcode (with the tvOS platform) and `brew install xcodegen`:
 
 ```sh
