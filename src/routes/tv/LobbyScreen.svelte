@@ -169,7 +169,7 @@
 		height: 1.3em;
 		border-radius: 0.18em;
 		background: var(--tv-gold);
-		color: #1d1400;
+		color: var(--color-accent-contrast);
 		font-size: min(3.4rem, 8vh);
 		font-weight: 900;
 		line-height: 1;

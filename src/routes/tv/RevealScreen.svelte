@@ -606,7 +606,7 @@
 		padding: 0.25rem 1rem;
 		border-radius: 999px;
 		background: var(--tv-gold);
-		color: #1d1400;
+		color: var(--color-accent-contrast);
 		font-size: 1.3rem;
 		font-weight: 850;
 		overflow-wrap: anywhere;

@@ -177,6 +177,7 @@
 	}
 	.w-team {
 		display: block;
+		margin-top: var(--space-2);
 		font-size: var(--text-md);
 		font-weight: var(--weight-bold);
 	}
