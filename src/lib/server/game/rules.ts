@@ -9,6 +9,9 @@
  * - Game winner: most rounds won. A tie for the lead after the planned rounds triggers sudden
  *   death between the tied leaders on a random unused location; if none is left they share.
  *   If nobody won a single round, nobody wins.
+ * - Teams: everyone still guesses alone; a round goes to the team(s) of its closest player(s),
+ *   1 point per team and round. The same leader / sudden-death rules apply between teams, and
+ *   sudden death is played by every active member of the tied teams.
  */
 import { haversineKm, normalizeLatLng, type LatLng } from '#lib/geo.ts';
 import type { NextStep, StandingRow } from '#lib/game/types.ts';
@@ -185,6 +188,106 @@ export function decideNextStep(args: {
 	if (winners.length <= 1) return { kind: 'finish', winnerPlayerIds: winners };
 	if (unusedLocationIds.length === 0) return { kind: 'finish', winnerPlayerIds: winners };
 	return { kind: 'suddenDeath', eligiblePlayerIds: winners };
+}
+
+// --- Teams -------------------------------------------------------------------------------------
+
+/** An active (non-kicked) player of a teams game, in join order. */
+export interface TeamPlayer {
+	id: string;
+	team: number;
+}
+
+/** A team's standing without its display name (added by the views). */
+export interface TeamStanding<R> {
+	team: number;
+	rank: number;
+	roundsWon: number;
+	members: R[];
+}
+
+/**
+ * The unique teams (ascending) of a round's winning players. `players` are the active players:
+ * a kicked player's round win no longer counts for their team.
+ */
+export function roundWinnerTeams(
+	winnerPlayerIds: readonly string[],
+	players: readonly TeamPlayer[]
+): number[] {
+	const teamOf = new Map(players.map((p) => [p.id, p.team]));
+	const teams = new Set<number>();
+	for (const id of winnerPlayerIds) {
+		const team = teamOf.get(id);
+		if (team !== undefined) teams.add(team);
+	}
+	return [...teams].sort((a, b) => a - b);
+}
+
+/**
+ * Team standings: one row per team with at least one active player, ordered by roundsWon desc
+ * then team index. A team scores at most 1 per round (sudden death included). Ranks depend on
+ * roundsWon only. `members` keep the order of the per-player `standings`.
+ */
+export function computeTeamStandings<R extends { playerId: string }>(
+	players: readonly TeamPlayer[],
+	standings: readonly R[],
+	rounds: readonly Pick<RoundOutcome, 'winnerPlayerIds'>[]
+): TeamStanding<R>[] {
+	const teamOf = new Map(players.map((p) => [p.id, p.team]));
+	const won = new Map<number, number>();
+	for (const p of players) won.set(p.team, 0);
+	for (const r of rounds) {
+		for (const team of roundWinnerTeams(r.winnerPlayerIds, players)) won.set(team, won.get(team)! + 1);
+	}
+	const rows = [...won.entries()]
+		.map(([team, roundsWon]) => ({
+			team,
+			roundsWon,
+			members: standings.filter((s) => teamOf.get(s.playerId) === team)
+		}))
+		.sort((a, b) => b.roundsWon - a.roundsWon || a.team - b.team);
+	const ranks = competitionRanks(rows, (r) => -r.roundsWon);
+	return rows.map((r, i) => ({ ...r, rank: ranks[i]! }));
+}
+
+/** Teams if the game ended right now: the leading teams, or none if no round was won. */
+export function currentWinnerTeams(rows: readonly Pick<TeamStanding<unknown>, 'team' | 'roundsWon'>[]): number[] {
+	if (rows.length === 0) return [];
+	const top = Math.max(...rows.map((r) => r.roundsWon));
+	if (top === 0) return [];
+	return rows
+		.filter((r) => r.roundsWon === top)
+		.map((r) => r.team)
+		.sort((a, b) => a - b);
+}
+
+/** Active members of `teams`, in team order, then join order. */
+export function teamMembers(teams: readonly number[], players: readonly TeamPlayer[]): string[] {
+	return [...teams]
+		.sort((a, b) => a - b)
+		.flatMap((team) => players.filter((p) => p.team === team).map((p) => p.id));
+}
+
+/**
+ * `decideNextStep` for a teams game: the leading team wins; tied leading teams play sudden death
+ * with all their active members (or share the win when no location is left).
+ */
+export function decideTeamNextStep(args: {
+	regularRoundsPlayed: number;
+	totalRounds: number;
+	teamStandings: readonly Pick<TeamStanding<unknown>, 'team' | 'roundsWon'>[];
+	players: readonly TeamPlayer[];
+	unusedLocationIds: readonly string[];
+}): NextStep {
+	const { regularRoundsPlayed, totalRounds, teamStandings, players, unusedLocationIds } = args;
+	if (regularRoundsPlayed < totalRounds) return { kind: 'round', number: regularRoundsPlayed + 1 };
+
+	const teams = currentWinnerTeams(teamStandings);
+	const members = teamMembers(teams, players);
+	if (teams.length <= 1 || unusedLocationIds.length === 0) {
+		return { kind: 'finish', winnerPlayerIds: members, winnerTeams: teams };
+	}
+	return { kind: 'suddenDeath', eligiblePlayerIds: members, teams };
 }
 
 /** Fisher–Yates shuffle (copy). */

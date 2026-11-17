@@ -45,6 +45,9 @@ export const PAIRING_CODE_TTL_MS = 10 * 60 * 1000;
 export const TIMER_MIN_SECONDS = 5;
 export const TIMER_MAX_SECONDS = 600;
 export const MAX_ROUNDS = 100;
+export const MIN_TEAMS = 2;
+export const MAX_TEAMS = 8;
+export const TEAM_NAME_MAX_LENGTH = 20;
 
 /** WebP variants stored for every photo, by longest-edge width in pixels. */
 export const PHOTO_SIZES = { sm: 480, md: 1024, lg: 1920 } as const;
@@ -147,6 +150,16 @@ export interface PlayerSummary {
 	connected: boolean;
 	/** Joined after the game started (informational; starts at 0 points). */
 	lateJoiner: boolean;
+	/** 0-based team index; only in a teams game. */
+	team?: number;
+}
+
+/** A team of a teams game. Show it with `teamName(team, locale)` (`#lib/game/teams.ts`). */
+export interface TeamInfo {
+	/** 0-based. */
+	index: number;
+	/** The host's name for the team; null means the default name ("Team 2"). */
+	name: string | null;
 }
 
 export interface GameInfo {
@@ -160,6 +173,10 @@ export interface GameInfo {
 	timerSeconds: number;
 	/** Planned regular rounds (excludes sudden death). */
 	totalRounds: number;
+	/** Every team, empty ones included; only in a teams game. */
+	teams?: TeamInfo[];
+	/** Players chose their team when joining; only in a teams game. */
+	teamPick?: boolean;
 }
 
 /** The round currently being played. Contains the clue but never the answer. */
@@ -224,6 +241,8 @@ export interface RoundResult {
 	noGuessPlayerIds: string[];
 	/** Closest player(s); several on an exact tie, empty if nobody guessed. */
 	winnerPlayerIds: string[];
+	/** Teams of the closest player(s), unique and ascending; only in a teams game. */
+	winnerTeams?: number[];
 	revealStartedAt: EpochMs;
 	/**
 	 * End of the TV's suspense beat (all pins shown, no answer yet), or the skip time. The TV then
@@ -249,13 +268,34 @@ export interface StandingRow {
 	guessedRounds: number;
 }
 
+/**
+ * A team's line in a teams game: ranked by rounds won (a team scores at most 1 per round, when
+ * one of its players is closest). Teams without active members are left out.
+ */
+export interface TeamStandingRow {
+	team: number;
+	/** As `TeamInfo.name`: null means the default name. */
+	name: string | null;
+	/** 1-based, ordered by roundsWon desc; equal roundsWon share a rank. */
+	rank: number;
+	roundsWon: number;
+	/** The team's active players, in per-player standings order. */
+	members: StandingRow[];
+}
+
 /** What `nextRound` will do from the standings screen. */
 export type NextStep =
 	| { kind: 'round'; number: number }
-	/** Tied leaders play an extra round; everyone else spectates. */
-	| { kind: 'suddenDeath'; eligiblePlayerIds: string[] }
-	/** Game over: one winner, or several on a shared win (library exhausted / ended early). */
-	| { kind: 'finish'; winnerPlayerIds: string[] };
+	/**
+	 * Tied leaders play an extra round; everyone else spectates. In a teams game `teams` are the
+	 * tied teams and `eligiblePlayerIds` all their active members.
+	 */
+	| { kind: 'suddenDeath'; eligiblePlayerIds: string[]; teams?: number[] }
+	/**
+	 * Game over: one winner, or several on a shared win (library exhausted / ended early). In a
+	 * teams game `winnerTeams` are the winning teams and `winnerPlayerIds` their active members.
+	 */
+	| { kind: 'finish'; winnerPlayerIds: string[]; winnerTeams?: number[] };
 
 // ---------------------------------------------------------------------------------------------
 // Phase states (shared by all roles)
@@ -281,6 +321,8 @@ export interface RevealState {
 	result: RoundResult;
 	/** Standings including this round. */
 	standings: StandingRow[];
+	/** Team standings including this round; only in a teams game. */
+	teamStandings?: TeamStandingRow[];
 	round?: never;
 }
 
@@ -289,6 +331,8 @@ export interface StandingsState {
 	/** The round that was just revealed. */
 	result: RoundResult;
 	standings: StandingRow[];
+	/** Only in a teams game. */
+	teamStandings?: TeamStandingRow[];
 	next: NextStep;
 	round?: never;
 }
@@ -296,8 +340,15 @@ export interface StandingsState {
 export interface FinishedState {
 	phase: 'finished';
 	standings: StandingRow[];
-	/** One winner, several on a shared win, empty if nobody won a round. */
+	/** Only in a teams game. */
+	teamStandings?: TeamStandingRow[];
+	/**
+	 * One winner, several on a shared win, empty if nobody won a round. In a teams game: the
+	 * active members of the winning team(s).
+	 */
 	winnerPlayerIds: string[];
+	/** Winning team(s), empty if nobody won a round; only in a teams game. */
+	winnerTeams?: number[];
 	endedEarly: boolean;
 	round?: never;
 	result?: never;
@@ -321,6 +372,8 @@ export interface PlayerSelf {
 	id: string;
 	nickname: string;
 	color: string;
+	/** Only in a teams game. */
+	team?: number;
 }
 
 /** The player's own cross for the current round, to restore state after a refresh. */
@@ -336,6 +389,8 @@ export interface OwnResult {
 	distanceKm: number | null;
 	rank: number | null;
 	won: boolean;
+	/** The player's team is among the round's winner teams; only in a teams game. */
+	teamWon?: boolean;
 }
 
 export type PlayerPhase =
@@ -429,6 +484,9 @@ export const JoinCodeSchema = v.pipe(
 
 export const UuidSchema = v.pipe(v.string(), v.uuid());
 
+/** No control characters, line/paragraph separators or bidi overrides (emoji ZWJ is fine). */
+const displayTextRegex = /^[^\p{Cc}\u2028\u2029\u202A-\u202E\u2066-\u2069]+$/u;
+
 export const NicknameSchema = v.pipe(
 	v.string(),
 	v.trim(),
@@ -436,8 +494,16 @@ export const NicknameSchema = v.pipe(
 	v.maxGraphemes(NICKNAME_MAX_LENGTH, `At most ${NICKNAME_MAX_LENGTH} characters`),
 	// Grapheme count is what users see; also cap UTF-16 length (emoji sequences are long).
 	v.maxLength(64, `At most ${NICKNAME_MAX_LENGTH} characters`),
-	// No control characters, line/paragraph separators or bidi overrides (emoji ZWJ is fine).
-	v.regex(/^[^\p{Cc}\u2028\u2029\u202A-\u202E\u2066-\u2069]+$/u, 'Invalid characters')
+	v.regex(displayTextRegex, 'Invalid characters')
+);
+
+/** A team name: trimmed, may be blank (the default name is shown), same characters as a nickname. */
+export const TeamNameSchema = v.pipe(
+	v.string(),
+	v.trim(),
+	v.maxGraphemes(TEAM_NAME_MAX_LENGTH, `At most ${TEAM_NAME_MAX_LENGTH} characters`),
+	v.maxLength(80, `At most ${TEAM_NAME_MAX_LENGTH} characters`),
+	v.check((s) => s === '' || displayTextRegex.test(s), 'Invalid characters')
 );
 
 export const LatSchema = v.pipe(v.number(), v.finite(), v.minValue(-90), v.maxValue(90));
@@ -454,7 +520,9 @@ export const HostStateArgSchema = UuidSchema;
 /** `joinGame`. Sets the player cookie. Fields are form-compatible. */
 export const JoinGameSchema = v.object({
 	code: JoinCodeSchema,
-	nickname: NicknameSchema
+	nickname: NicknameSchema,
+	/** 0-based team index; required (and checked against the team count) when players pick. */
+	team: v.optional(v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(MAX_TEAMS - 1)))
 });
 
 /** Shared by `updateGuess` (debounced while panning) and `lockIn` (final position). */
@@ -484,7 +552,13 @@ export const CreateGameSchema = v.object({
 		v.minValue(TIMER_MIN_SECONDS),
 		v.maxValue(TIMER_MAX_SECONDS)
 	),
-	language: LocaleSchema
+	language: LocaleSchema,
+	/** Teams mode; the other team fields are ignored without it. */
+	teams: v.optional(v.boolean(), false),
+	teamCount: v.optional(v.pipe(v.number(), v.integer(), v.minValue(MIN_TEAMS), v.maxValue(MAX_TEAMS))),
+	/** One per team, blank for the default name; extra names are dropped. */
+	teamNames: v.optional(v.array(TeamNameSchema)),
+	teamPick: v.optional(v.boolean(), false)
 });
 
 /** `pairTv` (admin): attach the TV showing `pairingCode` to the game. */

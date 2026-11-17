@@ -6,7 +6,15 @@ import { and, asc, eq, inArray, isNotNull } from 'drizzle-orm';
 import type { Executor } from '#lib/server/db/index.ts';
 import { gameRound, guess, player, type Game, type GameRound, type Player } from '#lib/server/db/schema.ts';
 import type { NextStep, StandingRow } from '#lib/game/types.ts';
-import { computeStandings, decideNextStep, type RoundOutcome } from './rules.ts';
+import {
+	computeStandings,
+	computeTeamStandings,
+	decideNextStep,
+	decideTeamNextStep,
+	type RoundOutcome,
+	type TeamPlayer,
+	type TeamStanding
+} from './rules.ts';
 import { deps } from './deps.ts';
 
 export async function loadPlayers(ex: Executor, gameId: string): Promise<Player[]> {
@@ -103,21 +111,58 @@ export function standingsOf(
 	);
 }
 
+/** Is this a teams game? */
+export function hasTeams(game: Pick<Game, 'teamCount'>): boolean {
+	return game.teamCount !== null;
+}
+
+/** Active players with their team (teams game), in join order. */
+export function teamPlayers(players: readonly Player[]): TeamPlayer[] {
+	return activePlayers(players)
+		.filter((p) => p.team !== null)
+		.map((p) => ({ id: p.id, team: p.team! }));
+}
+
+/** Team standings from the per-player `standings` (members keep their order). */
+export function teamStandingsOf<R extends { playerId: string }>(
+	players: readonly Player[],
+	outcomes: ReadonlyMap<string, RoundOutcome>,
+	standings: readonly R[]
+): TeamStanding<R>[] {
+	return computeTeamStandings(teamPlayers(players), standings, [...outcomes.values()]);
+}
+
 /** Library locations not used by any round of this game. */
 export async function unusedLocationIds(rounds: readonly GameRound[]): Promise<string[]> {
 	const used = new Set(rounds.map((r) => r.locationId));
 	return (await deps.libraryLocationIds()).filter((id) => !used.has(id));
 }
 
-/** `decideNextStep` with the library only consulted when it can matter. */
+/**
+ * `decideNextStep` (or `decideTeamNextStep` in a teams game, which needs `teams`) with the
+ * library only consulted when it can matter.
+ */
 export async function nextStepFor(
 	game: Game,
 	rounds: readonly GameRound[],
-	standings: readonly Pick<StandingRow, 'playerId' | 'roundsWon'>[]
+	standings: readonly Pick<StandingRow, 'playerId' | 'roundsWon'>[],
+	teams?: { players: readonly Player[]; standings: readonly Pick<TeamStanding<unknown>, 'team' | 'roundsWon'>[] }
 ): Promise<NextStep> {
 	const regularRoundsPlayed = regularRoundsStarted(rounds);
-	const base = { regularRoundsPlayed, totalRounds: game.roundCount, standings };
-	const first = decideNextStep({ ...base, unusedLocationIds: ['?'] });
+	const decide = (unused: readonly string[]): NextStep => {
+		if (!hasTeams(game)) {
+			return decideNextStep({ regularRoundsPlayed, totalRounds: game.roundCount, standings, unusedLocationIds: unused });
+		}
+		if (!teams) throw new Error('nextStepFor: a teams game needs its team standings');
+		return decideTeamNextStep({
+			regularRoundsPlayed,
+			totalRounds: game.roundCount,
+			teamStandings: teams.standings,
+			players: teamPlayers(teams.players),
+			unusedLocationIds: unused
+		});
+	};
+	const first = decide(['?']);
 	if (first.kind !== 'suddenDeath') return first;
-	return decideNextStep({ ...base, unusedLocationIds: await unusedLocationIds(rounds) });
+	return decide(await unusedLocationIds(rounds));
 }

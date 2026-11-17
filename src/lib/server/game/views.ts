@@ -33,6 +33,7 @@ import {
 	type RevealGuess,
 	type RoundResult,
 	type StandingRow,
+	type TeamStandingRow,
 	type TvGate,
 	type TvSnapshot,
 	type TvStateValue
@@ -41,10 +42,12 @@ import { gameVersion, subscriberCount } from './events.ts';
 import { connectedPlayerIds, isPresent } from './presence.ts';
 import { deps } from './deps.ts';
 import { clues, playlistNames, revealedClues, targets } from './library.ts';
+import { roundWinnerTeams, type RoundOutcome } from './rules.ts';
 import {
 	activePlayers,
 	currentRoundOf,
 	eligibleIds,
+	hasTeams,
 	isEligible,
 	loadPlayers,
 	loadRounds,
@@ -52,7 +55,9 @@ import {
 	regularRoundsStarted,
 	roundNumber,
 	roundOutcomes,
-	standingsOf
+	standingsOf,
+	teamPlayers,
+	teamStandingsOf
 } from './state.ts';
 import { ensurePairingCode, findGameByCode, findPlayerByToken, GameError, resolveTv } from './engine.ts';
 import { hashToken, isPlausibleToken } from '#lib/server/auth/crypto.ts';
@@ -79,6 +84,27 @@ interface GameModel {
 
 export function joinUrl(joinCode: string): string {
 	return `${ORIGIN}/join/${joinCode}`;
+}
+
+/** A teams game's stored name of `team` (null: the default name). */
+function storedTeamName(g: Game, team: number): string | null {
+	return g.teamNames[team] || null;
+}
+
+/** Team standings with names, from the per-player rows (which carry `connected`). */
+function teamStandingRows(
+	g: Game,
+	players: readonly Player[],
+	outcomes: ReadonlyMap<string, RoundOutcome>,
+	standings: readonly StandingRow[]
+): TeamStandingRow[] {
+	return teamStandingsOf(players, outcomes, standings).map((r) => ({
+		team: r.team,
+		name: storedTeamName(g, r.team),
+		rank: r.rank,
+		roundsWon: r.roundsWon,
+		members: r.members
+	}));
 }
 
 function competitionRanks(sortedValues: readonly number[]): number[] {
@@ -133,6 +159,7 @@ async function buildResult(
 		revealAt: Math.min(schedule.revealAt[i]!, answerVisibleAt)
 	}));
 	const guessed = new Set(counted.map((r) => r.playerId));
+	const teams = hasTeams(g) ? { winnerTeams: roundWinnerTeams(winners, teamPlayers(players)) } : {};
 	return {
 		round: {
 			index: round.index,
@@ -147,6 +174,7 @@ async function buildResult(
 		guesses,
 		noGuessPlayerIds: eligibleIds(round, players).filter((id) => !guessed.has(id)),
 		winnerPlayerIds: winners,
+		...teams,
 		revealStartedAt,
 		answerVisibleAt,
 		skipped: skippedAt !== null
@@ -176,12 +204,14 @@ async function loadModelIn(ex: Executor, gameId: string): Promise<GameModel | nu
 	]);
 	const connected = connectedPlayerIds(gameId);
 	const active = activePlayers(players);
+	const teams = hasTeams(g);
 	const summaries: PlayerSummary[] = active.map((p) => ({
 		id: p.id,
 		nickname: p.nickname,
 		color: p.color,
 		connected: connected.has(p.id),
-		lateJoiner: g.startedAt !== null && p.joinedAt.getTime() > g.startedAt.getTime()
+		lateJoiner: g.startedAt !== null && p.joinedAt.getTime() > g.startedAt.getTime(),
+		...(teams && p.team !== null ? { team: p.team } : {})
 	}));
 	const info: GameInfo = {
 		id: g.id,
@@ -190,7 +220,13 @@ async function loadModelIn(ex: Executor, gameId: string): Promise<GameModel | nu
 		language: g.language,
 		playlistName: (g.playlistId && names.get(g.playlistId)) || { nameSv: null, nameEn: null },
 		timerSeconds: g.timerSeconds,
-		totalRounds: g.roundCount
+		totalRounds: g.roundCount,
+		...(teams
+			? {
+					teams: Array.from({ length: g.teamCount! }, (_, index) => ({ index, name: storedTeamName(g, index) })),
+					teamPick: g.teamPick
+				}
+			: {})
 	};
 	const current = currentRoundOf(g, rounds);
 	const withConnected = (rows: Omit<StandingRow, 'connected'>[]): StandingRow[] =>
@@ -250,26 +286,39 @@ async function loadModelIn(ex: Executor, gameId: string): Promise<GameModel | nu
 			if (!current || !current.endedAt) {
 				throw new Error(`Game ${g.id} is in '${g.phase}' without an ended round`);
 			}
-			const standingRows = standingsOf(players, await roundOutcomes(ex, rounds));
+			const outcomes = await roundOutcomes(ex, rounds);
+			const standingRows = standingsOf(players, outcomes);
+			const standings = withConnected(standingRows);
+			const teamStandings = teams ? teamStandingRows(g, players, outcomes, standings) : null;
+			const extra = teamStandings ? { teamStandings } : {};
 			const result = await buildResult(ex, g, current, rounds, players);
 			phase =
 				g.phase === 'reveal'
-					? { phase: 'reveal', result, standings: withConnected(standingRows) }
+					? { phase: 'reveal', result, standings, ...extra }
 					: {
 							phase: 'standings',
 							result,
-							standings: withConnected(standingRows),
-							next: await nextStepFor(g, rounds, standingRows)
+							standings,
+							...extra,
+							next: await nextStepFor(
+								g,
+								rounds,
+								standingRows,
+								teamStandings ? { players, standings: teamStandings } : undefined
+							)
 						};
 			break;
 		}
 		case 'finished': {
-			const standingRows = standingsOf(players, await roundOutcomes(ex, rounds));
+			const outcomes = await roundOutcomes(ex, rounds);
+			const standings = withConnected(standingsOf(players, outcomes));
 			const activeIds = new Set(active.map((p) => p.id));
 			phase = {
 				phase: 'finished',
-				standings: withConnected(standingRows),
+				standings,
+				...(teams ? { teamStandings: teamStandingRows(g, players, outcomes, standings) } : {}),
 				winnerPlayerIds: g.winnerPlayerIds.filter((id) => activeIds.has(id)),
+				...(teams ? { winnerTeams: g.winnerTeams } : {}),
 				endedEarly: g.endedEarly
 			};
 			break;
@@ -384,7 +433,12 @@ export async function buildPlayerStateForGame(
 		players: m.summaries,
 		role: 'player' as const,
 		status: 'playing' as const,
-		me: { id: me.id, nickname: me.nickname, color: me.color }
+		me: {
+			id: me.id,
+			nickname: me.nickname,
+			color: me.color,
+			...(hasTeams(m.game) && me.team !== null ? { team: me.team } : {})
+		}
 	};
 	const phase = m.phase;
 	switch (phase.phase) {
@@ -404,6 +458,12 @@ export async function buildPlayerStateForGame(
 }
 
 function ownResult(result: RoundResult, m: GameModel, me: Player): OwnResult | null {
+	const own = ownOutcome(result, m, me);
+	if (own === null || !result.winnerTeams) return own;
+	return { ...own, teamWon: me.team !== null && result.winnerTeams.includes(me.team) };
+}
+
+function ownOutcome(result: RoundResult, m: GameModel, me: Player): OwnResult | null {
 	const mine = result.guesses.find((g) => g.playerId === me.id);
 	if (mine) return { distanceKm: mine.distanceKm, rank: mine.rank, won: mine.isWinner };
 	if (m.current && isEligible(m.current, me)) return { distanceKm: null, rank: null, won: false };

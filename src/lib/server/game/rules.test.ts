@@ -1,13 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import {
 	computeStandings,
+	computeTeamStandings,
 	countsAsGuess,
 	currentWinners,
+	currentWinnerTeams,
 	decideNextStep,
+	decideTeamNextStep,
 	haversineKm,
 	leaders,
 	pickRandom,
 	pickRoundLocations,
+	roundWinnerTeams,
 	scoreRound,
 	shuffled,
 	type GuessRecord,
@@ -230,6 +234,137 @@ describe('decideNextStep', () => {
 		expect(
 			decideNextStep({ regularRoundsPlayed: 1, totalRounds: 1, standings: st({ solo: 1 }), unusedLocationIds: [] })
 		).toEqual({ kind: 'finish', winnerPlayerIds: ['solo'] });
+	});
+});
+
+describe('teams', () => {
+	// Team 0: a, b · team 1: c, d · team 2: e (join order a…e).
+	const players = [
+		{ id: 'a', team: 0 },
+		{ id: 'b', team: 0 },
+		{ id: 'c', team: 1 },
+		{ id: 'd', team: 1 },
+		{ id: 'e', team: 2 }
+	];
+	const rows = (ids: string[]) => ids.map((playerId) => ({ playerId }));
+
+	describe('roundWinnerTeams', () => {
+		it('one point per team: two players of one team tying give that team once', () => {
+			expect(roundWinnerTeams(['b', 'a'], players)).toEqual([0]);
+		});
+		it('players of two teams tying give both teams, ascending', () => {
+			expect(roundWinnerTeams(['e', 'c'], players)).toEqual([1, 2]);
+		});
+		it('nobody guessed, or the winner is no longer an active player', () => {
+			expect(roundWinnerTeams([], players)).toEqual([]);
+			expect(roundWinnerTeams(['kicked'], players)).toEqual([]);
+		});
+	});
+
+	describe('computeTeamStandings', () => {
+		it('ranks by rounds won, then team index; members keep the standings order', () => {
+			const t = computeTeamStandings(players, rows(['d', 'a', 'e', 'c', 'b']), [
+				{ winnerPlayerIds: ['c'] },
+				{ winnerPlayerIds: ['a', 'b'] },
+				{ winnerPlayerIds: ['d'] },
+				{ winnerPlayerIds: ['e', 'a'] }
+			]);
+			expect(t.map((r) => [r.team, r.roundsWon, r.rank])).toEqual([
+				[0, 2, 1],
+				[1, 2, 1],
+				[2, 1, 3]
+			]);
+			expect(t[0]!.members.map((m) => m.playerId)).toEqual(['a', 'b']);
+			expect(t[1]!.members.map((m) => m.playerId)).toEqual(['d', 'c']);
+		});
+
+		it('leaves out teams without active members and drops kicked members’ wins', () => {
+			// 'e' (team 2) was kicked: not in `players`, its round win is gone, so is team 2.
+			const active = players.filter((p) => p.id !== 'e');
+			const t = computeTeamStandings(active, rows(['a', 'b', 'c', 'd']), [
+				{ winnerPlayerIds: ['e'] },
+				{ winnerPlayerIds: ['c'] }
+			]);
+			expect(t.map((r) => [r.team, r.roundsWon, r.rank])).toEqual([
+				[1, 1, 1],
+				[0, 0, 2]
+			]);
+		});
+
+		it('with no rounds every team shares first place; nobody wins yet', () => {
+			const t = computeTeamStandings(players, rows(['a', 'b', 'c', 'd', 'e']), []);
+			expect(t.map((r) => [r.team, r.rank])).toEqual([
+				[0, 1],
+				[1, 1],
+				[2, 1]
+			]);
+			expect(currentWinnerTeams(t)).toEqual([]);
+		});
+	});
+
+	describe('decideTeamNextStep', () => {
+		const st = (won: Record<number, number>) =>
+			Object.entries(won).map(([team, roundsWon]) => ({ team: Number(team), roundsWon }));
+
+		it('plays the next regular round while rounds remain', () => {
+			expect(
+				decideTeamNextStep({
+					regularRoundsPlayed: 1,
+					totalRounds: 3,
+					teamStandings: st({ 0: 1 }),
+					players,
+					unusedLocationIds: []
+				})
+			).toEqual({ kind: 'round', number: 2 });
+		});
+
+		it('finishes with a single winning team and its active members', () => {
+			expect(
+				decideTeamNextStep({
+					regularRoundsPlayed: 3,
+					totalRounds: 3,
+					teamStandings: st({ 1: 2, 0: 1, 2: 0 }),
+					players,
+					unusedLocationIds: ['x']
+				})
+			).toEqual({ kind: 'finish', winnerPlayerIds: ['c', 'd'], winnerTeams: [1] });
+		});
+
+		it('sudden death with every member of the tied teams, in team then join order', () => {
+			expect(
+				decideTeamNextStep({
+					regularRoundsPlayed: 3,
+					totalRounds: 3,
+					teamStandings: st({ 2: 1, 0: 1, 1: 0 }),
+					players,
+					unusedLocationIds: ['x']
+				})
+			).toEqual({ kind: 'suddenDeath', eligiblePlayerIds: ['a', 'b', 'e'], teams: [0, 2] });
+		});
+
+		it('the tied teams share the win when no location is left', () => {
+			expect(
+				decideTeamNextStep({
+					regularRoundsPlayed: 3,
+					totalRounds: 3,
+					teamStandings: st({ 0: 1, 1: 1, 2: 0 }),
+					players,
+					unusedLocationIds: []
+				})
+			).toEqual({ kind: 'finish', winnerPlayerIds: ['a', 'b', 'c', 'd'], winnerTeams: [0, 1] });
+		});
+
+		it('nobody wins if no round was won', () => {
+			expect(
+				decideTeamNextStep({
+					regularRoundsPlayed: 2,
+					totalRounds: 2,
+					teamStandings: st({ 0: 0, 1: 0 }),
+					players,
+					unusedLocationIds: ['x']
+				})
+			).toEqual({ kind: 'finish', winnerPlayerIds: [], winnerTeams: [] });
+		});
 	});
 });
 

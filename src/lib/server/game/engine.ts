@@ -53,18 +53,21 @@ import { nextPlayerColor } from '#lib/ui/colors.ts';
 import { hashToken, isPlausibleToken, mintToken } from '#lib/server/auth/crypto.ts';
 import { invalidateGame, notifyGame } from './events.ts';
 import { connectedPlayerIds, onPresenceChange } from './presence.ts';
-import { currentWinners, pickRandom, pickRoundLocations, scoreRound } from './rules.ts';
+import { currentWinners, currentWinnerTeams, pickRandom, pickRoundLocations, scoreRound, teamMembers } from './rules.ts';
 import { deps, type TimerHandle } from './deps.ts';
 import { playlistLocationIds, targets } from './library.ts';
 import {
 	activePlayers,
 	eligibleIds,
+	hasTeams,
 	isEligible,
 	loadPlayers,
 	loadRounds,
 	nextStepFor,
 	roundOutcomes,
 	standingsOf,
+	teamPlayers,
+	teamStandingsOf,
 	unusedLocationIds
 } from './state.ts';
 
@@ -95,7 +98,9 @@ export type GameErrorCode =
 	| 'ALREADY_LOCKED'
 	| 'STALE_ROUND'
 	| 'PLAYLIST_EMPTY'
-	| 'INVALID_PAIRING_CODE';
+	| 'INVALID_PAIRING_CODE'
+	/** A teams game where players pick: no team chosen, or not one of the game's teams. */
+	| 'TEAM_REQUIRED';
 
 export class GameError extends Error {
 	constructor(
@@ -116,6 +121,7 @@ export function gameErrorStatus(code: GameErrorCode): number {
 		case 'NOT_ELIGIBLE':
 			return 403;
 		case 'INVALID_PAIRING_CODE':
+		case 'TEAM_REQUIRED':
 			return 400;
 		default:
 			return 409;
@@ -406,6 +412,35 @@ export async function isGameFull(gameId: string): Promise<boolean> {
 	return (await activePlayerCount(gameId)) >= MAX_PLAYERS;
 }
 
+/** What the join page shows for a teams game where players pick their team. */
+export interface JoinTeams {
+	pick: true;
+	/** `name` is the stored name: empty means the default name. */
+	teams: Array<{ index: number; name: string; players: number }>;
+}
+
+/**
+ * The teams to choose from on the join page, with their active player counts (a snapshot at page
+ * load). Null unless the game has teams and players pick.
+ */
+export async function joinTeams(g: Game): Promise<JoinTeams | null> {
+	if (g.teamCount === null || !g.teamPick) return null;
+	const rows = await db
+		.select({ team: player.team, n: count() })
+		.from(player)
+		.where(and(eq(player.gameId, g.id), eq(player.kicked, false)))
+		.groupBy(player.team);
+	const counts = new Map(rows.map((r) => [r.team, r.n]));
+	return {
+		pick: true,
+		teams: Array.from({ length: g.teamCount }, (_, index) => ({
+			index,
+			name: g.teamNames[index] ?? '',
+			players: counts.get(index) ?? 0
+		}))
+	};
+}
+
 /** The TV owning `token`, or null. */
 export async function resolveTv(token: string | null): Promise<TvScreen | null> {
 	if (!isPlausibleToken(token)) return null;
@@ -565,12 +600,20 @@ function randomPairingCode(): string {
 	return String(randomInt(10 ** PAIRING_CODE_LENGTH)).padStart(PAIRING_CODE_LENGTH, '0');
 }
 
+/** `createGame` input; the team flags may be left out (a game without teams). */
+export type CreateGameArgs = Omit<CreateGameInput, 'teams' | 'teamPick'> &
+	Partial<Pick<CreateGameInput, 'teams' | 'teamPick'>>;
+
 /** Creates a game in `lobby` with a fresh join code and its planned rounds. */
-export async function createGame(input: CreateGameInput): Promise<CreateGameResult> {
+export async function createGame(input: CreateGameArgs): Promise<CreateGameResult> {
 	const ids = await playlistLocationIds(input.playlistId);
 	if (ids === null) throw new GameError('NOT_FOUND', 'Playlist not found');
 	const picked = pickRoundLocations(ids, input.roundCount, input.selection, input.shuffle, deps.random);
 	if (picked.length === 0) throw new GameError('PLAYLIST_EMPTY', 'The playlist has no locations');
+	if (input.teams && input.teamCount === undefined) throw new Error('createGame: teams need a teamCount');
+	const teamCount = input.teams ? input.teamCount! : null;
+	const teamNames =
+		teamCount === null ? [] : Array.from({ length: teamCount }, (_, i) => input.teamNames?.[i]?.trim() ?? '');
 
 	for (let attempt = 0; ; attempt++) {
 		const joinCode = randomJoinCode();
@@ -585,7 +628,10 @@ export async function createGame(input: CreateGameInput): Promise<CreateGameResu
 						timerSeconds: input.timerSeconds,
 						roundCount: picked.length,
 						selection: input.selection,
-						shuffle: input.shuffle
+						shuffle: input.shuffle,
+						teamCount,
+						teamNames,
+						teamPick: teamCount !== null && (input.teamPick ?? false)
 					})
 					.returning({ id: game.id });
 				await tx
@@ -693,8 +739,10 @@ export async function nextRound(gameId: string, expected: ExpectedState): Promis
 		if (g.phase !== 'standings') throw new GameError('WRONG_PHASE', 'Not between rounds');
 
 		const [players, rounds] = await Promise.all([loadPlayers(tx, g.id), loadRounds(tx, g.id)]);
-		const standings = standingsOf(players, await roundOutcomes(tx, rounds));
-		const next = await nextStepFor(g, rounds, standings);
+		const outcomes = await roundOutcomes(tx, rounds);
+		const standings = standingsOf(players, outcomes);
+		const teamStandings = hasTeams(g) ? teamStandingsOf(players, outcomes, standings) : null;
+		const next = await nextStepFor(g, rounds, standings, teamStandings ? { players, standings: teamStandings } : undefined);
 
 		if (next.kind === 'round') {
 			const round = rounds.find((r) => !r.isSuddenDeath && r.startedAt === null);
@@ -717,16 +765,38 @@ export async function nextRound(gameId: string, expected: ExpectedState): Promis
 			}
 		}
 		// Finish (also the fallback when no round/location is left after all).
-		await finishTx(tx, g, next.kind === 'finish' ? next.winnerPlayerIds : currentWinners(standings), false, fx);
+		const winners =
+			next.kind === 'finish'
+				? { playerIds: next.winnerPlayerIds, teams: next.winnerTeams ?? [] }
+				: leadersNow(players, standings, teamStandings);
+		await finishTx(tx, g, winners, false, fx);
 	});
 }
 
-async function finishTx(tx: Transaction, g: Game, winners: string[], endedEarly: boolean, fx: Effects) {
+interface Winners {
+	playerIds: string[];
+	/** Winning teams (teams game); empty otherwise. */
+	teams: number[];
+}
+
+/** Who wins if the game ended right now: the leading players, or the leading teams' members. */
+function leadersNow(
+	players: readonly Player[],
+	standings: Parameters<typeof currentWinners>[0],
+	teamStandings: Parameters<typeof currentWinnerTeams>[0] | null
+): Winners {
+	if (!teamStandings) return { playerIds: currentWinners(standings), teams: [] };
+	const teams = currentWinnerTeams(teamStandings);
+	return { playerIds: teamMembers(teams, teamPlayers(players)), teams };
+}
+
+async function finishTx(tx: Transaction, g: Game, winners: Winners, endedEarly: boolean, fx: Effects) {
 	await tx
 		.update(game)
 		.set({
 			phase: 'finished',
-			winnerPlayerIds: winners,
+			winnerPlayerIds: winners.playerIds,
+			winnerTeams: winners.teams,
 			endedEarly,
 			finishedAt: new Date(deps.now()),
 			revealStartedAt: null,
@@ -767,11 +837,13 @@ export async function endGame(gameId: string): Promise<void> {
 			}
 		}
 		const [players, rounds] = await Promise.all([loadPlayers(tx, g.id), loadRounds(tx, g.id)]);
-		const standings = standingsOf(players, await roundOutcomes(tx, rounds));
-		let winners = currentWinners(standings);
+		const outcomes = await roundOutcomes(tx, rounds);
+		const standings = standingsOf(players, outcomes);
+		const teamStandings = hasTeams(g) ? teamStandingsOf(players, outcomes, standings) : null;
+		let winners = leadersNow(players, standings, teamStandings);
 		if (!endedEarly) {
-			const next = await nextStepFor(g, rounds, standings);
-			if (next.kind === 'finish') winners = next.winnerPlayerIds;
+			const next = await nextStepFor(g, rounds, standings, teamStandings ? { players, standings: teamStandings } : undefined);
+			if (next.kind === 'finish') winners = { playerIds: next.winnerPlayerIds, teams: next.winnerTeams ?? [] };
 			else endedEarly = true;
 		}
 		await finishTx(tx, g, winners, endedEarly, fx);
@@ -787,6 +859,9 @@ export async function endGame(gameId: string): Promise<void> {
  * Late joining is allowed in any phase before `finished`; a player joining while a round runs
  * spectates that round. Max `MAX_PLAYERS` non-kicked players; nicknames are unique per game
  * (case-insensitive, kicked players' names stay taken).
+ * In a teams game the player gets a team for good: the one they picked (`input.team`, required
+ * when the game lets players pick) or else the team with the fewest active players (lowest index
+ * on a tie). Games without teams ignore `input.team`.
  */
 export async function joinGame(
 	input: JoinGameInput,
@@ -811,6 +886,7 @@ export async function joinGame(
 		if (players.some((p) => p.nickname.toLowerCase() === lower)) {
 			throw new GameError('NICKNAME_TAKEN', 'Nickname taken');
 		}
+		const team = assignTeam(g, active, input.team);
 
 		let joinedAt = deps.now();
 		if (g.phase === 'round') {
@@ -828,6 +904,7 @@ export async function joinGame(
 					gameId: g.id,
 					nickname,
 					color: nextPlayerColor(active.map((p) => p.color)),
+					team,
 					tokenHash: hash,
 					joinedAt: new Date(joinedAt)
 				})
@@ -841,6 +918,18 @@ export async function joinGame(
 		fx.notify.add(g.id);
 		return { gameId: g.id, playerId: row!.id, joinCode: g.joinCode, token };
 	});
+}
+
+/** The new player's team (see `joinGame`); null in a game without teams. */
+function assignTeam(g: Game, active: readonly Player[], picked: number | undefined): number | null {
+	if (g.teamCount === null) return null;
+	if (g.teamPick) {
+		if (picked === undefined || picked >= g.teamCount) throw new GameError('TEAM_REQUIRED', 'Choose a team');
+		return picked;
+	}
+	const sizes = Array.from({ length: g.teamCount }, () => 0);
+	for (const p of active) if (p.team !== null && p.team < g.teamCount) sizes[p.team]!++;
+	return sizes.indexOf(Math.min(...sizes));
 }
 
 type GuessCheck = { ok: true; round: GameRound } | { ok: false; reason: 'stale' };

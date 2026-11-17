@@ -169,6 +169,20 @@ export const game = pgTable(
 			.default(sql`'{}'::uuid[]`),
 		/** True when the host ended the game before all rounds were played. */
 		endedEarly: boolean('ended_early').notNull().default(false),
+		/** Number of teams (2–8); null for a game without teams. */
+		teamCount: integer('team_count'),
+		/** One name per team; an empty string means the default name ("Team 2"). */
+		teamNames: text('team_names')
+			.array()
+			.notNull()
+			.default(sql`'{}'::text[]`),
+		/** Players choose their team when joining (otherwise the smallest team is assigned). */
+		teamPick: boolean('team_pick').notNull().default(false),
+		/** Final winning team indexes (several on a shared win). Empty until finished. */
+		winnerTeams: integer('winner_teams')
+			.array()
+			.notNull()
+			.default(sql`'{}'::integer[]`),
 		createdAt: createdAt(),
 		startedAt: timestamp('started_at', { withTimezone: true }),
 		finishedAt: timestamp('finished_at', { withTimezone: true }),
@@ -189,7 +203,8 @@ export const game = pgTable(
 			sql`${t.phase} IN ('lobby', 'round', 'reveal', 'standings', 'finished')`
 		),
 		check('game_timer_ck', sql`${t.timerSeconds} BETWEEN 5 AND 600`),
-		check('game_round_count_ck', sql`${t.roundCount} >= 1`)
+		check('game_round_count_ck', sql`${t.roundCount} >= 1`),
+		check('game_team_count_ck', sql`${t.teamCount} IS NULL OR ${t.teamCount} BETWEEN 2 AND 8`)
 	]
 );
 
@@ -248,6 +263,8 @@ export const player = pgTable(
 		/** SHA-256 (hex) of the reconnect token. The token itself only lives on the phone. */
 		tokenHash: text('token_hash').notNull(),
 		kicked: boolean('kicked').notNull().default(false),
+		/** 0-based team index in a teams game; null otherwise. Never changes after joining. */
+		team: integer('team'),
 		joinedAt: timestamp('joined_at', { withTimezone: true }).notNull().defaultNow()
 	},
 	(t) => [
@@ -255,7 +272,8 @@ export const player = pgTable(
 		uniqueIndex('player_token_hash_uq').on(t.tokenHash),
 		// Code points, not graphemes: emoji sequences are long, so this is only a sanity bound.
 		check('player_nickname_ck', sql`char_length(${t.nickname}) BETWEEN 1 AND 64`),
-		check('player_color_ck', sql`${t.color} ~ '^#[0-9a-f]{6}$'`)
+		check('player_color_ck', sql`${t.color} ~ '^#[0-9a-f]{6}$'`),
+		check('player_team_ck', sql`${t.team} IS NULL OR ${t.team} >= 0`)
 	]
 );
 
