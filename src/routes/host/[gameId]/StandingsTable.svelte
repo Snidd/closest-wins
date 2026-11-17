@@ -163,6 +163,8 @@
 	.team-head th {
 		padding-top: var(--space-3);
 		border-top: 2px solid var(--color-border);
+	}
+	.team-head th {
 		text-align: left;
 		font-size: var(--text-md);
 		letter-spacing: 0;

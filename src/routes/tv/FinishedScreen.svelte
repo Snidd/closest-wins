@@ -175,7 +175,7 @@
 	.teams .podium {
 		flex-wrap: wrap;
 		gap: 1.5vh 2vw;
-		margin-top: 3vh;
+		margin-top: 7vh;
 	}
 	.champ {
 		position: relative;
@@ -211,6 +211,11 @@
 	.shared .crown {
 		top: calc(-1 * min(2.4rem, 5vh));
 		width: min(3.4rem, 7vh);
+	}
+	/* Team members are smaller than a lone champion: so are their crowns. */
+	.teams .crown {
+		top: calc(-1 * min(2rem, 4.2vh));
+		width: min(3rem, 6vh);
 	}
 	.champ-name {
 		font-weight: 900;
