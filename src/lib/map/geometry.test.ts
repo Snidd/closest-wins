@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { haversineKm } from '#lib/geo.ts';
+import { haversineKm, MERCATOR_MAX_LAT } from '#lib/geo.ts';
 import {
 	boundsOf,
+	constrainCenterLat,
 	greatCirclePath,
 	lngExtent,
 	padBounds,
@@ -130,5 +131,44 @@ describe('worldFitZoom', () => {
 		expect(worldFitZoom(1024, 0, 3)).toBeCloseTo(1);
 		expect(worldFitZoom(300, 0, 3)).toBe(0);
 		expect(worldFitZoom(8192, 0, 3)).toBe(3);
+	});
+});
+
+describe('constrainCenterLat', () => {
+	/** Latitude at world-pixel y (0 at the top) for a world `W` px tall. */
+	const latAtY = (y: number, W: number) => (2 * Math.atan(Math.exp((0.5 - y / W) * 2 * Math.PI)) * 180) / Math.PI - 90;
+
+	it('lets the centre reach any latitude while the world is shorter than the screen', () => {
+		// Zoom 0: a 512 px world on an 800 px tall screen.
+		for (const lat of [85, -85, 85.05, -85.05, 0, 70]) expect(constrainCenterLat(lat, 0, 800)).toBeCloseTo(lat, 9);
+		expect(constrainCenterLat(89, 0, 800)).toBeCloseTo(MERCATOR_MAX_LAT, 9);
+		expect(constrainCenterLat(-89, 0, 800)).toBeCloseTo(-MERCATOR_MAX_LAT, 9);
+	});
+	it("matches MapLibre's default bound once the world is at least twice the screen height", () => {
+		const H = 800;
+		for (const zoom of [Math.log2((2 * H) / 512), 4]) {
+			const W = 512 * 2 ** zoom;
+			expect(constrainCenterLat(84, zoom, H)).toBeCloseTo(latAtY(H / 2, W), 9);
+			expect(constrainCenterLat(-84, zoom, H)).toBeCloseTo(latAtY(W - H / 2, W), 9);
+			expect(constrainCenterLat(30, zoom, H)).toBeCloseTo(30, 9);
+		}
+	});
+	it('shrinks the slack continuously around W = H', () => {
+		const H = 800;
+		const zoom = Math.log2(H / 512);
+		for (const lat of [89, 80, -89]) {
+			expect(Math.abs(constrainCenterLat(lat, zoom - 1e-6, H) - constrainCenterLat(lat, zoom + 1e-6, H))).toBeLessThan(1e-3);
+		}
+		// Inside the band the bound lies between the full range and the default.
+		const mid = Math.log2((1.5 * H) / 512);
+		const bound = constrainCenterLat(89, mid, H);
+		expect(bound).toBeLessThan(MERCATOR_MAX_LAT);
+		expect(bound).toBeGreaterThan(latAtY(H / 2, 1.5 * H));
+	});
+	it('returns a finite latitude for a degenerate height', () => {
+		for (const h of [0, -10, Number.NaN, Number.POSITIVE_INFINITY]) {
+			expect(Number.isFinite(constrainCenterLat(89, 2, h))).toBe(true);
+			expect(constrainCenterLat(40, 2, h)).toBeCloseTo(40, 9);
+		}
 	});
 });

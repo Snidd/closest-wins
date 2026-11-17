@@ -202,3 +202,32 @@ export function worldFitZoom(widthPx: number, minZoom: number, maxZoom: number):
 	if (!(widthPx > 0)) return maxZoom;
 	return Math.max(minZoom, Math.min(maxZoom, Math.log2(widthPx / 512)));
 }
+
+/** Web Mercator y of a latitude as a fraction of the world height (0 at the top, 1 at the bottom). */
+function mercatorY(lat: number): number {
+	return 0.5 - Math.log(Math.tan(Math.PI / 4 + (lat * RAD) / 2)) / (2 * Math.PI);
+}
+
+/** Inverse of `mercatorY`. */
+function latFromMercatorY(y: number): number {
+	return (2 * Math.atan(Math.exp((0.5 - y) * 2 * Math.PI)) - Math.PI / 2) / RAD;
+}
+
+/**
+ * Latitude the guess map's centre may have at `zoom` in a viewport `heightPx` tall (MapLibre:
+ * 512 px world at zoom 0). In world pixels (`W = 512 · 2^zoom`, `H = heightPx`, y = 0 at the
+ * top) the centre's y is clamped to `[lo, W − lo]` with `lo = clamp((W − H) / 2, 0, H / 2)`:
+ * - `W ≤ H` (world shorter than the screen): `lo = 0`, so the centre reaches any latitude up to
+ *   ±`MERCATOR_MAX_LAT` and the world can be dragged up and down, leaving empty space;
+ * - `W ≥ 2H`: `lo = H / 2`, MapLibre's default (the viewport never goes past the world's edge);
+ * - in between, the slack shrinks continuously. Without this band the allowed range would jump
+ *   from the whole world to a single point at `W = H`, yanking the map while pinch-zooming.
+ * A non-positive or non-finite `heightPx` counts as a world shorter than the screen (`lo = 0`).
+ */
+export function constrainCenterLat(lat: number, zoom: number, heightPx: number): number {
+	const W = 512 * 2 ** zoom;
+	const H = heightPx > 0 && Number.isFinite(heightPx) ? heightPx : 0;
+	const lo = Math.max(0, Math.min(H / 2, (W - H) / 2));
+	const y = Math.max(lo, Math.min(W - lo, mercatorY(lat) * W));
+	return latFromMercatorY(y / W);
+}
