@@ -70,6 +70,18 @@ pnpm dev:lan              # dev server reachable from phones on the LAN (ORIGIN 
 
 Admin password for dev is in `.env` (`ADMIN_PASSWORD`). Login page: `/login?next=/host`.
 
+Fresh checkout: `pnpm install`, copy `.env.example` to `.env` (in a factory worktree, copy the
+main checkout's `.env`), start and migrate the db as above, `pnpm exec playwright install
+chromium` once per machine. `data/` (map tiles, media) is gitignored; in a worktree, point
+`DATA_DIR` at the main checkout's `data/`.
+
+Dev server on a given port: `ORIGIN=http://localhost:<port> DATA_DIR=<main checkout>/data
+pnpm dev --port <port> --strictPort`.
+
+Validation (what `factory/checks.sh` runs): `pnpm install --frozen-lockfile`, `pnpm check`,
+`pnpm test:unit`, then `CI=1 pnpm test:e2e --project chromium` (which also runs `pnpm build`).
+`e2e/full-game.e2e.ts` is not in the checks; run it by hand when touching game flow or reveal timing.
+
 ## Layout
 
 ```
@@ -141,3 +153,16 @@ compose.lan.yaml              the same image for a home server / Portainer: host
 - `e2e/full-game.e2e.ts` runs as its own project after the rest (its sudden death picks any
   library location and it restarts a private server); iterate with
   `pnpm test:e2e e2e/full-game.e2e.ts --no-deps`.
+
+## Software factory
+
+`/factory run` builds every open GitHub issue labeled `factory` through
+intake → spec → build → gate → review → approve, one PR per issue. State is in
+`factory/jobs/` (gitignored); `factory/bin/job` is its only writer. Checks:
+`factory/checks.sh`. Dashboard: `cd factory && python3 -m http.server`, then
+open http://localhost:8000/dashboard.html.
+
+Each job works in its own git worktree, a full checkout of the repo at
+`.worktrees/<job-id>` (gitignored). A tool run from the repo root that doesn't
+read `.gitignore` sees those copies too; exclude `.worktrees/` in its config
+(Playwright's `testDir` and Vite's `server.watch.ignored` already do).

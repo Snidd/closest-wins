@@ -39,6 +39,8 @@ export default defineConfig(({ command }) => ({
 					: undefined
 		})
 	],
+	// The software factory keeps full checkouts of the repo in .worktrees/.
+	server: { watch: { ignored: ['**/.worktrees/**'] } },
 	test: {
 		include: ['src/**/*.test.ts', 'scripts/**/*.test.ts'],
 		environment: 'node'

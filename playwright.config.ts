@@ -34,6 +34,8 @@ export default defineConfig({
 					DEV_PAGES: '1'
 				}
 			},
+	// Only e2e/: the software factory keeps full checkouts of the repo in .worktrees/.
+	testDir: 'e2e',
 	testMatch: '**/*.e2e.{ts,js}',
 	// Phones, TV and host of one game share a single server; a few files at a time keeps the
 	// SwiftShader-rendered maps responsive.
