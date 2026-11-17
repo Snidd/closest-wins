@@ -120,6 +120,7 @@ tvos/                         Apple TV app (SwiftUI, tvOS 17+), the native twin 
                               reveal timing and geometry; `cd tvos/Core && swift test`
   ClosestWins/                the app: AppModel, Screens/ (one per web TV screen), Views/
   ClosestWins/Resources/shared.json, Fixtures/   generated (pnpm tvos:export / tvos:fixtures)
+  Language: forced to Swedish by `AppModel.forcedLanguage` (ClosestWins/AppModel.swift); nil = game language like /tv
 data/                         runtime data (gitignored): media/, map/world.pmtiles
 Dockerfile, compose.prod.yaml production image and stack (see README)
 compose.lan.yaml              the same image for a home server / Portainer: host network, map download

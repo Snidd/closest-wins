@@ -38,10 +38,18 @@ final class AppModel {
 		}
 	}
 
-	/// The game's language once paired, the device's before that.
+	/// Forces the app's language on every screen, ignoring the language the host chose for the game
+	/// and the Apple TV's language. Set to `nil` to follow the game's language once paired and the
+	/// device locale before that, the same as the web `/tv`.
+	static let forcedLanguage: Lang? = .sv
+
+	/// `forcedLanguage` if set, otherwise the game's language once paired, the device's before that.
 	var lang: Lang {
-		if let snap = state?.snapshot { return snap.game.language }
-		return Foundation.Locale.preferredLanguages.first?.hasPrefix("sv") == true ? .sv : .en
+		displayLanguage(
+			forced: Self.forcedLanguage,
+			game: state?.snapshot?.game.language,
+			preferredLanguages: Foundation.Locale.preferredLanguages
+		)
 	}
 
 	var t: Strings { Strings(shared, lang) }
