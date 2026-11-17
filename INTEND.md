@@ -31,10 +31,16 @@ closest to the real point wins the round.
 1. **Create.** The host logs in on their phone with the admin password, picks a playlist and
    creates a game. Options, with defaults from the playlist: number of rounds (first N or
    random N), shuffle on/off, seconds per round, and the game language for the big screen.
+   Optionally **teams** (off by default): 2 to 8 teams, each with an optional name (a blank name
+   shows as "Team 2" / "Lag 2"), and whether players pick their own team. Team settings cannot
+   be changed after the game is created.
 2. **Pair the TV.** The TV opens `/tv` and shows a short pairing code. The host types or scans
    it, and the TV becomes that game's big screen.
 3. **Join.** The TV shows a QR code and a short join code. Players scan, type a nickname
    (unique in the game, about 16 characters max) and get an automatically assigned pin colour.
+   In a teams game, players either pick a team on the join page (when the host allowed it) or
+   are placed on the team with the fewest players (lowest team number on a tie); late joiners
+   follow the same rule. A player's team never changes after joining.
 4. **Round.** The clue is shown on the TV and on every phone (collapsible over the map on
    phones). A countdown runs. Players pan and zoom, then press "Lock in".
 5. **Round end.** The round ends when the timer hits zero or when every connected player has
@@ -61,6 +67,13 @@ closest to the real point wins the round.
   location from the library that was not used in this game. Repeat until one leader is closer.
   If the library has no unused locations left, the tied players share the win **(assumed)**.
 - Total distance over the game is recorded and shown as a stat, but does not decide the winner.
+- **Teams:** everyone still guesses alone. A round goes to the team of the closest player:
+  1 point per team, even when two of its players tie for closest; players of different teams
+  tying give each of their teams the point. A kicked player's round wins no longer count for
+  their team, and a team without active players is left out of the standings. The game winner
+  is the team with the most rounds won. A tie between teams at the end sends every active
+  member of the tied teams into sudden death (everyone else watches), repeated until one team
+  is ahead; with no unused location left the tied teams share the win.
 
 ### Reveal
 
@@ -146,6 +159,8 @@ attaching a photo by URL. There are no game-control tools.
 - Mixing several playlists in one game.
 - Agent-driven game control through MCP.
 - Multi-instance or serverless deployment.
+- Teams in the Apple TV app and in the admin game history (both show players only for now),
+  team colours on pins, and changing a player's team or the team settings after creation.
 
 ## Open questions
 

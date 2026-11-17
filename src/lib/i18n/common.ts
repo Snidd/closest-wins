@@ -96,7 +96,16 @@ export const common = defineDict({
 		reconnecting: 'Reconnecting…',
 		// Languages
 		languageSv: 'Swedish',
-		languageEn: 'English'
+		languageEn: 'English',
+		// Teams
+		teamDefault: (n: number) => `Team ${n}`,
+		team: 'Team',
+		chooseTeam: 'Pick your team',
+		teamRequired: 'Pick a team first',
+		teamPlayers: (n: number) => (n === 1 ? '1 player' : `${n} players`),
+		teamTookRound: (team: string) => `${team} took the round`,
+		teamWins: (team: string) => `${team} wins!`,
+		teamsShareWin: (teams: string) => `${teams} share the win!`
 	},
 	sv: {
 		appName: 'Närmast vinner',
@@ -181,6 +190,14 @@ export const common = defineDict({
 		disconnected: 'Frånkopplad',
 		reconnecting: 'Återansluter…',
 		languageSv: 'Svenska',
-		languageEn: 'Engelska'
+		languageEn: 'Engelska',
+		teamDefault: (n) => `Lag ${n}`,
+		team: 'Lag',
+		chooseTeam: 'Välj ditt lag',
+		teamRequired: 'Välj ett lag först',
+		teamPlayers: (n) => (n === 1 ? '1 spelare' : `${n} spelare`),
+		teamTookRound: (team) => `${team} tog rundan`,
+		teamWins: (team) => `${team} vinner!`,
+		teamsShareWin: (teams) => `${teams} delar på segern!`
 	}
 });

@@ -19,6 +19,7 @@
 	import { tv as tvDict } from '#lib/i18n/tv.ts';
 	import { common } from '#lib/i18n/common.ts';
 	import { localized } from '#lib/i18n/localized.ts';
+	import { gameTeamNames } from '#lib/game/teams.ts';
 	import Avatar from './Avatar.svelte';
 	import JoinBug from './JoinBug.svelte';
 
@@ -198,7 +199,12 @@
 
 	{#if done}
 		<aside class="panel" data-testid="reveal-results">
-			<div class="winner-card" data-testid="round-winner" data-winners={result.winnerPlayerIds.join(',')}>
+			<div
+				class="winner-card"
+				data-testid="round-winner"
+				data-winners={result.winnerPlayerIds.join(',')}
+				data-winner-teams={result.winnerTeams?.join(',')}
+			>
 				{#if winners.length === 0}
 					<div class="nobody">
 						<svg viewBox="0 0 48 48" aria-hidden="true"
@@ -232,6 +238,11 @@
 					</p>
 					<p class="w-title">{winners.length > 1 ? t().shareRound : t().winsRound}</p>
 					{#if winnerKm !== null}<p class="w-sub">{t().away(tc().km(winnerKm))}</p>{/if}
+					{#if result.winnerTeams?.length}
+						<p class="w-team" data-testid="round-winner-team">
+							{tc().teamTookRound(gameTeamNames(game, result.winnerTeams, locale()))}
+						</p>
+					{/if}
 				{/if}
 			</div>
 
@@ -590,6 +601,17 @@
 		font-variant-numeric: tabular-nums;
 		animation: rise 600ms 650ms var(--ease-out) both;
 	}
+	.w-team {
+		margin-top: 0.4rem;
+		padding: 0.25rem 1rem;
+		border-radius: 999px;
+		background: var(--tv-gold);
+		color: var(--color-accent-contrast);
+		font-size: 1.3rem;
+		font-weight: 850;
+		overflow-wrap: anywhere;
+		animation: rise 600ms 750ms var(--ease-out) both;
+	}
 	.nobody {
 		display: flex;
 		flex-direction: column;
@@ -698,6 +720,7 @@
 	.instant .w-names,
 	.instant .w-title,
 	.instant .w-sub,
+	.instant .w-team,
 	.instant .row,
 	.instant .more,
 	.instant .noguess {

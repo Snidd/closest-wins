@@ -29,9 +29,15 @@ export class SimPlayer extends Device {
 		return this.playerId;
 	}
 
-	/** Joins through the real `joinGame` form; `connected` then opens the player stream. */
-	async join({ connected = true }: { connected?: boolean } = {}): Promise<this> {
-		expectRedirect(await this.form('game', 'joinGame', { code: this.code, nickname: this.nickname }), `join ${this.nickname}`);
+	/**
+	 * Joins through the real `joinGame` form; `connected` then opens the player stream. `team`
+	 * is the picked team (teams games where players pick their team).
+	 */
+	async join({ connected = true, team }: { connected?: boolean; team?: number } = {}): Promise<this> {
+		expectRedirect(
+			await this.form('game', 'joinGame', { code: this.code, nickname: this.nickname, team }),
+			`join ${this.nickname}`
+		);
 		if (connected) await this.connect();
 		return this;
 	}

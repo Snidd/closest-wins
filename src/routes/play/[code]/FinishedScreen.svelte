@@ -1,6 +1,10 @@
-<!-- Game over: winner(s), the player's own placement, final table, way back to the start. -->
+<!--
+  Game over: winner(s), the player's own placement, final table, way back to the start. In a
+  teams game: the winning team(s) with their members, and the own team's placement.
+-->
 <script lang="ts">
-	import { useT } from '#lib/i18n/context.ts';
+	import { useLocale, useT } from '#lib/i18n/context.ts';
+	import { gameTeamName } from '#lib/game/teams.ts';
 	import { player } from '#lib/i18n/player.ts';
 	import Button from '#lib/ui/Button.svelte';
 	import Shell from './Shell.svelte';
@@ -10,16 +14,22 @@
 
 	let { s }: { s: Snap<'finished'> } = $props();
 	const t = useT(player);
+	const locale = useLocale();
 
 	const winners = $derived(s.winnerPlayerIds);
-	const iWon = $derived(winners.includes(s.me.id));
+	const winnerTeams = $derived(s.winnerTeams ?? []);
+	const teamGame = $derived(s.winnerTeams !== undefined);
+	const myTeamWon = $derived(s.me.team !== undefined && winnerTeams.includes(s.me.team));
+	const teamNames = $derived(t().list(winnerTeams.map((i) => gameTeamName(s.game, i, locale()))));
+	const myTeamRow = $derived(s.teamStandings?.find((r) => r.team === s.me.team));
+	const iWon = $derived(teamGame ? myTeamWon : winners.includes(s.me.id));
 	const shared = $derived(winners.length > 1);
 	const nick = (id: string) =>
 		s.players.find((p) => p.id === id)?.nickname ?? s.standings.find((r) => r.playerId === id)?.nickname ?? '?';
 	const colorOf = (id: string) =>
 		s.players.find((p) => p.id === id)?.color ?? s.standings.find((r) => r.playerId === id)?.color ?? '#888888';
 	const myRow = $derived(s.standings.find((r) => r.playerId === s.me.id));
-	const kind = $derived(winners.length === 0 ? 'nobody' : iWon ? 'me' : 'other');
+	const kind = $derived((teamGame ? winnerTeams : winners).length === 0 ? 'nobody' : iWon ? 'me' : 'other');
 
 	let mounted = $state(false);
 	$effect(() => {
@@ -44,7 +54,12 @@
 		<Button href="/" size="lg" block variant="secondary">{t().backToStart}</Button>
 	{/snippet}
 
-	<section class={['hero', kind]} data-testid="finish-hero" data-kind={kind}>
+	<section
+		class={['hero', kind]}
+		data-testid="finish-hero"
+		data-kind={kind}
+		data-winner-teams={s.winnerTeams?.join(',')}
+	>
 		{#if kind === 'nobody'}
 			<h1>{t().nobodyWon}</h1>
 			<p class="muted">{t().nobodyWonBody}</p>
@@ -55,7 +70,13 @@
 				{/each}
 			</div>
 			<h1 data-testid="finish-title">
-				{#if iWon}
+				{#if teamGame}
+					{#if myTeamWon}
+						{winnerTeams.length > 1 ? t().yourTeamSharedWin : t().yourTeamWon}
+					{:else}
+						{winnerTeams.length > 1 ? t().sharedWin(teamNames) : t().winnerIs(teamNames)}
+					{/if}
+				{:else if iWon}
 					{shared ? t().youSharedWin : t().youWon}
 				{:else if shared}
 					{t().sharedWin(t().list(winners.map(nick)))}
@@ -63,11 +84,19 @@
 					{t().winnerIs(nick(winners[0]!))}
 				{/if}
 			</h1>
-			{#if iWon && shared}
+			{#if teamGame}
+				<p class="muted" data-testid="winner-members">
+					{#if myTeamWon}{teamNames} · {/if}{t().list(winners.map(nick))}
+				</p>
+			{:else if iWon && shared}
 				<p class="muted">{t().list(winners.filter((id) => id !== s.me.id).map(nick))}</p>
 			{/if}
 		{/if}
-		{#if myRow && kind === 'other'}
+		{#if teamGame && myTeamRow && kind === 'other'}
+			<p class="place" data-testid="my-place">
+				{t().yourTeamFinished(t().ordinal(myTeamRow.rank), s.teamStandings!.length)}
+			</p>
+		{:else if !teamGame && myRow && kind === 'other'}
 			<p class="place" data-testid="my-place">
 				{t().youFinished(t().ordinal(myRow.rank), s.standings.length)}
 			</p>
@@ -75,7 +104,15 @@
 		{#if s.endedEarly}<p class="muted small">{t().endedEarly}</p>{/if}
 	</section>
 
-	<StandingsTable rows={s.standings} meId={s.me.id} winnerIds={winners} caption={t().finalStandings} />
+	<StandingsTable
+		rows={s.standings}
+		meId={s.me.id}
+		winnerIds={winners}
+		caption={t().finalStandings}
+		teams={s.teamStandings}
+		myTeam={s.me.team}
+		{winnerTeams}
+	/>
 
 	<p class="muted thanks">{t().thanksForPlaying}</p>
 </Shell>

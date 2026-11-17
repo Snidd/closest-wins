@@ -46,8 +46,12 @@
 		const el = e.currentTarget;
 		const toEnd = () => el.setSelectionRange(el.value.length, el.value.length);
 		toEnd();
-		// Taps place the caret after focus/pointerup; correct it once more on the next frame.
-		requestAnimationFrame(toEnd);
+		// Taps place the caret after focus/pointerup; correct it once more on the next frame. Only
+		// a caret: a selection made since then (select all to replace the code) must survive a
+		// late frame.
+		requestAnimationFrame(() => {
+			if (el.selectionStart === el.selectionEnd) toEnd();
+		});
 	}
 
 	function onsubmit(e: SubmitEvent) {

@@ -76,6 +76,24 @@ const SPECIAL: Record<string, Record<string, { kind: 'distance' } | { kind: 'omi
 	}
 };
 
+/**
+ * Web-only strings, not exported at all: the Apple TV app does not show teams yet. Move a key
+ * out of here (and run `pnpm tvos:export`) once the app uses it.
+ */
+export const WEB_ONLY: Record<string, ReadonlySet<string>> = {
+	common: new Set([
+		'teamDefault',
+		'team',
+		'chooseTeam',
+		'teamRequired',
+		'teamPlayers',
+		'teamTookRound',
+		'teamWins',
+		'teamsShareWin'
+	]),
+	tv: new Set(['duelHintTeams'])
+};
+
 const DISTANCE_LOCALES = { en: 'en-GB', sv: 'sv-SE' } as const satisfies Record<Locale, string>;
 /** Sample distances (km) covering every branch of `formatDistance`, exported as test cases. */
 const DISTANCE_SAMPLES = [0, 0.004, 0.0149, 0.42, 0.995, 1, 3.25, 9.96, 12.6, 999.5, 1234.4, 19_999.9];
@@ -153,6 +171,7 @@ function exportDict(dictName: string, locale: Locale, omitted: OmittedString[]):
 	const out: Record<string, MessageEntry> = {};
 	for (const [key, value] of Object.entries(dict[locale])) {
 		const where = `${dictName}.${locale}.${key}`;
+		if (WEB_ONLY[dictName]?.has(key)) continue;
 		if (typeof value === 'string') {
 			out[key] = value;
 			continue;

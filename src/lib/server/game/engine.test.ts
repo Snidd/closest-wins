@@ -901,6 +901,277 @@ describe('endGame', () => {
 	});
 });
 
+describe('teams', () => {
+	async function newTeamsGame(rounds: number, teams: { count: number; pick?: boolean; names?: string[] }) {
+		const r = await createGame({
+			playlistId: fx.playlistId,
+			roundCount: rounds,
+			selection: 'first',
+			shuffle: false,
+			timerSeconds: TIMER_S,
+			language: 'en',
+			teams: true,
+			teamCount: teams.count,
+			teamNames: teams.names,
+			teamPick: teams.pick ?? false
+		});
+		fx.gameIds.push(r.gameId);
+		return r;
+	}
+
+	async function joinTeam(code: string, nickname: string, team?: number) {
+		fx.clock.now += 1;
+		const r = await joinGame({ code, nickname, team }, null);
+		const p = (await resolvePlayer(r.gameId, r.token))!;
+		presence.push(enterPresence(r.gameId, `player:${p.id}`));
+		return { ...r, token: r.token!, player: p };
+	}
+
+	async function gameRow(gameId: string) {
+		const [g] = await db.select().from(game).where(eq(game.id, gameId));
+		return g!;
+	}
+
+	it('creating a teams game stores its settings; without teams they are ignored', async () => {
+		const t = await newTeamsGame(2, { count: 3, pick: true, names: [' Red ', '', 'Blue', 'Extra'] });
+		expect(await gameRow(t.gameId)).toMatchObject({
+			teamCount: 3,
+			teamNames: ['Red', '', 'Blue'],
+			teamPick: true,
+			winnerTeams: []
+		});
+		const short = await newTeamsGame(2, { count: 2 });
+		expect(await gameRow(short.gameId)).toMatchObject({ teamCount: 2, teamNames: ['', ''], teamPick: false });
+
+		const off = await createGame({
+			playlistId: fx.playlistId,
+			roundCount: 2,
+			selection: 'first',
+			shuffle: false,
+			timerSeconds: TIMER_S,
+			language: 'en',
+			teams: false,
+			teamCount: 4,
+			teamNames: ['X'],
+			teamPick: true
+		});
+		fx.gameIds.push(off.gameId);
+		expect(await gameRow(off.gameId)).toMatchObject({ teamCount: null, teamNames: [], teamPick: false });
+
+		const host = await buildHostSnapshot(t.gameId);
+		expect(host.game.teams).toEqual([
+			{ index: 0, name: 'Red' },
+			{ index: 1, name: null },
+			{ index: 2, name: 'Blue' }
+		]);
+		expect(host.game.teamPick).toBe(true);
+	});
+
+	it('auto-assignment balances the teams, also after a kick and for late joiners', async () => {
+		const { gameId, joinCode } = await newTeamsGame(2, { count: 2 });
+		const joined = [];
+		for (const name of ['P1', 'P2', 'P3', 'P4']) joined.push(await joinTeam(joinCode, name, 1));
+		expect(joined.map((j) => j.player.team)).toEqual([0, 1, 0, 1]);
+
+		await kickPlayer(gameId, joined[0]!.playerId);
+		const late = await joinTeam(joinCode, 'P5');
+		expect(late.player.team).toBe(0);
+
+		await startRound(gameId);
+		const mid = await joinTeam(joinCode, 'P6'); // 2 v 2 again → lowest index, mid-round
+		expect(mid.player.team).toBe(0);
+		const next = await joinTeam(joinCode, 'P7');
+		expect(next.player.team).toBe(1);
+		const host = await buildHostSnapshot(gameId);
+		expect(host.players.map((p) => [p.nickname, p.team])).toEqual([
+			['P2', 1],
+			['P3', 0],
+			['P4', 1],
+			['P5', 0],
+			['P6', 0],
+			['P7', 1]
+		]);
+		const me = await buildPlayerStateForGame(gameId, mid.token);
+		expect(me.status === 'playing' && me.me.team).toBe(0);
+		expect(me.status === 'playing' && me.phase === 'round' && me.canGuess).toBe(false);
+	});
+
+	it('picking requires a valid team; rejoining keeps the team; games without teams ignore it', async () => {
+		const { joinCode } = await newTeamsGame(2, { count: 3, pick: true });
+		await expectGameError(joinGame({ code: joinCode, nickname: 'NoTeam' }, null), 'TEAM_REQUIRED');
+		await expectGameError(joinGame({ code: joinCode, nickname: 'Far', team: 3 }, null), 'TEAM_REQUIRED');
+		const blue = await joinTeam(joinCode, 'Blue', 2);
+		expect(blue.player.team).toBe(2);
+		const again = await joinGame({ code: joinCode, nickname: 'Other', team: 0 }, blue.token);
+		expect(again.playerId).toBe(blue.playerId);
+		expect((await resolvePlayer(blue.gameId, blue.token))!.team).toBe(2);
+
+		const plain = await newGame(2);
+		const p = await joinTeam(plain.joinCode, 'Plain', 1);
+		expect(p.player.team).toBeNull();
+	});
+
+	it('a team takes the round through its closest player', async () => {
+		const { gameId, joinCode } = await newTeamsGame(2, { count: 2, pick: true, names: ['Red', ''] });
+		const a = await joinTeam(joinCode, 'Ann', 0);
+		const b = await joinTeam(joinCode, 'Bob', 1);
+		const c = await joinTeam(joinCode, 'Cat', 0);
+		const l0 = fx.locations[0]!;
+		await startRound(gameId);
+		await place(a, 0, near(l0, 2));
+		await place(b, 0, near(l0, 0.2));
+		await place(c, 0, near(l0, 3));
+		await endRoundNow(gameId);
+
+		const host = await buildHostSnapshot(gameId);
+		if (host.phase !== 'reveal') throw new Error('expected reveal');
+		expect(host.result.winnerPlayerIds).toEqual([b.playerId]);
+		expect(host.result.winnerTeams).toEqual([1]);
+		expect(host.teamStandings!.map((r) => [r.team, r.name, r.rank, r.roundsWon])).toEqual([
+			[1, null, 1, 1],
+			[0, 'Red', 2, 0]
+		]);
+		expect(host.teamStandings![1]!.members.map((m) => m.playerId)).toEqual([a.playerId, c.playerId]);
+
+		const pa = await buildPlayerStateForGame(gameId, a.token);
+		const pb = await buildPlayerStateForGame(gameId, b.token);
+		expect(pa.status === 'playing' && pa.phase === 'reveal' && pa.myResult).toMatchObject({ won: false, teamWon: false });
+		expect(pb.status === 'playing' && pb.phase === 'reveal' && pb.myResult).toMatchObject({ won: true, teamWon: true });
+	});
+
+	async function tiedTeamsGame() {
+		// Team 0: Ann, Dan · team 1: Bob · team 2: Cat. Ann and Bob win a round each.
+		const { gameId, joinCode } = await newTeamsGame(2, { count: 3, pick: true });
+		const a = await joinTeam(joinCode, 'Ann', 0);
+		const b = await joinTeam(joinCode, 'Bob', 1);
+		const c = await joinTeam(joinCode, 'Cat', 2);
+		const d = await joinTeam(joinCode, 'Dan', 0);
+		const [l0, l1] = fx.locations;
+		await startRound(gameId);
+		await place(a, 0, near(l0!, 0.1));
+		await place(b, 0, near(l0!, 2));
+		await place(c, 0, near(l0!, 3));
+		await endRoundNow(gameId);
+		await nextRound(gameId);
+		await nextRound(gameId);
+		await place(a, 1, near(l1!, 2));
+		await place(b, 1, near(l1!, 0.1));
+		await place(d, 1, near(l1!, 3));
+		await endRoundNow(gameId);
+		await nextRound(gameId);
+		return { gameId, a, b, c, d };
+	}
+
+	it('a tie at the end starts sudden death with exactly the active members of the tied teams', async () => {
+		const { gameId, a, b, c, d } = await tiedTeamsGame();
+		let host = await buildHostSnapshot(gameId);
+		if (host.phase !== 'standings') throw new Error('expected standings');
+		expect(host.next).toEqual({
+			kind: 'suddenDeath',
+			eligiblePlayerIds: [a.playerId, d.playerId, b.playerId],
+			teams: [0, 1]
+		});
+
+		await nextRound(gameId);
+		host = await buildHostSnapshot(gameId);
+		if (host.phase !== 'round') throw new Error('expected round');
+		expect(host.round.isSuddenDeath).toBe(true);
+		expect(host.round.eligiblePlayerIds).toEqual([a.playerId, d.playerId, b.playerId]);
+		const [sd] = await db
+			.select()
+			.from(gameRound)
+			.where(and(eq(gameRound.gameId, gameId), eq(gameRound.isSuddenDeath, true)));
+		expect(sd!.eligiblePlayerIds).toEqual([a.playerId, d.playerId, b.playerId]);
+		const pc = await buildPlayerStateForGame(gameId, c.token);
+		expect(pc.status === 'playing' && pc.phase === 'round' && pc.canGuess).toBe(false);
+		const late = await joinTeam((await gameRow(gameId)).joinCode, 'Late', 0);
+		const pl = await buildPlayerStateForGame(gameId, late.token);
+		expect(pl.status === 'playing' && pl.phase === 'round' && pl.canGuess).toBe(false);
+
+		// Dan (team 0) is closest: team 0 wins.
+		const loc = fx.locations.find((l) => l.id === sd!.locationId)!;
+		await place(a, 2, near(loc, 2), { lock: true });
+		await place(d, 2, near(loc, 0.1), { lock: true });
+		await place(b, 2, near(loc, 1), { lock: true });
+		host = await buildHostSnapshot(gameId);
+		expect(host.phase === 'reveal' && host.result.winnerTeams).toEqual([0]);
+		await nextRound(gameId);
+		host = await buildHostSnapshot(gameId);
+		if (host.phase !== 'standings') throw new Error('expected standings');
+		expect(host.next).toEqual({
+			kind: 'finish',
+			winnerPlayerIds: [a.playerId, d.playerId, late.playerId],
+			winnerTeams: [0]
+		});
+		await nextRound(gameId);
+		host = await buildHostSnapshot(gameId);
+		if (host.phase !== 'finished') throw new Error('expected finished');
+		expect(host.winnerTeams).toEqual([0]);
+		expect(host.teamStandings!.map((r) => [r.team, r.roundsWon])).toEqual([
+			[0, 2],
+			[1, 1],
+			[2, 0]
+		]);
+		expect((await gameRow(gameId)).winnerTeams).toEqual([0]);
+	});
+
+	it('endGame gives the win to the leading team', async () => {
+		const { gameId, joinCode } = await newTeamsGame(3, { count: 2, pick: true });
+		const a = await joinTeam(joinCode, 'Ann', 0);
+		const b = await joinTeam(joinCode, 'Bob', 1);
+		const c = await joinTeam(joinCode, 'Cat', 1);
+		const l0 = fx.locations[0]!;
+		await startRound(gameId);
+		await place(a, 0, near(l0, 2));
+		await place(b, 0, near(l0, 3));
+		await place(c, 0, near(l0, 0.5));
+		await endRoundNow(gameId);
+		await nextRound(gameId);
+		await nextRound(gameId);
+		await endGame(gameId);
+		const host = await buildHostSnapshot(gameId);
+		if (host.phase !== 'finished') throw new Error('expected finished');
+		expect(host.endedEarly).toBe(true);
+		expect(host.winnerTeams).toEqual([1]);
+		expect(host.winnerPlayerIds).toEqual([b.playerId, c.playerId]);
+		const tv = await buildPlayerStateForGame(gameId, a.token);
+		expect(tv.status === 'playing' && tv.phase === 'finished' && tv.winnerTeams).toEqual([1]);
+	});
+
+	it('snapshots of a game without teams contain none of the team keys', async () => {
+		const TEAM_KEYS = ['teams', 'teamPick', 'team', 'winnerTeams', 'teamStandings', 'teamWon'];
+		const keysOf = (value: unknown, out = new Set<string>()): Set<string> => {
+			if (Array.isArray(value)) value.forEach((v) => keysOf(v, out));
+			else if (value && typeof value === 'object') {
+				for (const [k, v] of Object.entries(value)) {
+					out.add(k);
+					keysOf(v, out);
+				}
+			}
+			return out;
+		};
+		const seen = new Set<string>();
+		const collect = async (gameId: string, token: string) => {
+			keysOf(await buildHostSnapshot(gameId), seen);
+			keysOf(await buildPlayerStateForGame(gameId, token), seen);
+		};
+		const { gameId, joinCode } = await newGame(1);
+		const a = await join(joinCode, 'Solo');
+		await collect(gameId, a.token);
+		await startRound(gameId);
+		await collect(gameId, a.token);
+		await place(a, 0, near(fx.locations[0]!, 1));
+		await endRoundNow(gameId);
+		await collect(gameId, a.token);
+		await nextRound(gameId);
+		await collect(gameId, a.token);
+		await nextRound(gameId);
+		await collect(gameId, a.token);
+		expect(seen.has('winnerPlayerIds')).toBe(true);
+		expect(TEAM_KEYS.filter((k) => seen.has(k))).toEqual([]);
+	});
+});
+
 describe('TV pairing', () => {
 	it('register → pairing code → paired → finished with next code → next game', async () => {
 		const unregistered = await buildTvState(null);

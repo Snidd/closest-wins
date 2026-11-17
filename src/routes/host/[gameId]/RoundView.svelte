@@ -8,7 +8,8 @@
 	import { useT } from '#lib/i18n/context.ts';
 	import { common } from '#lib/i18n/common.ts';
 	import { host } from '#lib/i18n/host.ts';
-	import type { HostPhase } from './types.ts';
+	import { gameTeamName } from '#lib/game/teams.ts';
+	import { listNames, type HostPhase } from './types.ts';
 
 	type Props = { snap: HostPhase<'round'>; offsetMs: number; locale: Locale };
 	let { snap, offsetMs, locale }: Props = $props();
@@ -27,6 +28,12 @@
 	const offline = $derived(eligible.filter((p) => !lockedIds.has(p.id) && !p.connected));
 	const watching = $derived(snap.players.filter((p) => !eligibleIds.has(p.id)));
 	const progress = $derived(eligible.length ? locked.length / eligible.length : 0);
+	/** Sudden death in a teams game: the tied teams (those of the eligible players). */
+	const tiedTeams = $derived(
+		round.isSuddenDeath && snap.game.teams
+			? [...new Set(eligible.flatMap((p) => (p.team === undefined ? [] : [p.team])))].sort((a, b) => a - b)
+			: []
+	);
 
 	const clueText = $derived(localized(round.clue, 'text', locale));
 	let clueOpen = $state(false);
@@ -47,6 +54,16 @@
 		<div class="bar" aria-hidden="true"><span style:transform="scaleX({progress})"></span></div>
 	</div>
 </section>
+
+{#if tiedTeams.length}
+	<p class="sd-teams" data-testid="sudden-death-teams">
+		<span aria-hidden="true">⚡</span>
+		{t().suddenDeathN(round.number)}: {listNames(
+			tiedTeams.map((i) => gameTeamName(snap.game, i, locale)),
+			locale
+		)}
+	</p>
+{/if}
 
 <section class="card" aria-label={c().players} data-testid="round-players">
 	{#if guessing.length}
@@ -122,6 +139,16 @@
 </section>
 
 <style>
+	.sd-teams {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		padding: var(--space-3) var(--space-4);
+		border-radius: var(--radius-lg);
+		background: color-mix(in oklab, var(--color-accent) 12%, var(--color-surface));
+		border: 2px solid color-mix(in oklab, var(--color-accent) 70%, transparent);
+		font-weight: var(--weight-bold);
+	}
 	.timer-card {
 		display: flex;
 		align-items: center;

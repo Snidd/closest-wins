@@ -7,12 +7,15 @@
 	import RevealMap from '#lib/map/RevealMap.svelte';
 	import { localized } from '#lib/i18n/localized.ts';
 	import { useLocale, useT } from '#lib/i18n/context.ts';
+	import { common } from '#lib/i18n/common.ts';
 	import { player } from '#lib/i18n/player.ts';
+	import { gameTeamName } from '#lib/game/teams.ts';
 	import type { Snap } from './types.ts';
 
 	type Props = { s: Snap<'reveal'> | Snap<'standings'>; compact?: boolean };
 	let { s, compact = false }: Props = $props();
 	const t = useT(player);
+	const tc = useT(common);
 	const locale = useLocale();
 
 	const result = $derived(s.result);
@@ -25,6 +28,13 @@
 	const winnersOthers = $derived(result.winnerPlayerIds.filter((id) => id !== s.me.id));
 	const winnerDistance = $derived(result.guesses.find((g) => g.isWinner)?.distanceKm ?? null);
 	const shared = $derived(result.winnerPlayerIds.length > 1);
+	/** Teams game: did the player's team take the round (also for spectators)? */
+	const teamWon = $derived(
+		mine?.teamWon ?? (s.me.team !== undefined && (result.winnerTeams ?? []).includes(s.me.team))
+	);
+	const winnerTeamNames = $derived(
+		t().list((result.winnerTeams ?? []).map((i) => gameTeamName(s.game, i, locale())))
+	);
 	const kind = $derived(
 		!mine ? 'spectator' : mine.distanceKm === null ? 'noGuess' : mine.won ? 'won' : 'placed'
 	);
@@ -55,6 +65,11 @@
 		<h1 class="small">{t().spectatedRound}</h1>
 	{/if}
 
+	{#if result.winnerTeams?.length}
+		<p class={['team-outcome', { won: teamWon }]} data-testid="team-outcome" data-team-won={teamWon}>
+			{teamWon ? t().yourTeamTookRound : tc().teamTookRound(winnerTeamNames)}
+		</p>
+	{/if}
 	{#if result.winnerPlayerIds.length === 0}
 		<p class="winner muted">{t().nobodyGuessed}</p>
 	{:else if winnersOthers.length > 0}
@@ -147,6 +162,18 @@
 		box-shadow: var(--shadow-sm);
 		font-weight: var(--weight-bold);
 		font-size: var(--text-lg);
+	}
+	.team-outcome {
+		margin-top: var(--space-3);
+		padding: var(--space-1) var(--space-3);
+		border-radius: var(--radius-pill);
+		background: var(--color-surface-2);
+		font-weight: var(--weight-bold);
+		text-wrap: balance;
+	}
+	.team-outcome.won {
+		background: var(--color-accent);
+		color: var(--color-accent-contrast);
 	}
 	.winner {
 		margin-top: var(--space-3);

@@ -2,19 +2,23 @@
   Join a game: the URL in the TV's QR code. Loads fast (no map, no live query), one input,
   usable one-handed. The server load decides the state (see +page.server.ts); the `joinGame`
   remote form is the source of truth for everything it cannot know (nickname taken, kicked, a
-  game that filled up or ended in the meantime). Works without JavaScript too.
+  game that filled up or ended in the meantime). Works without JavaScript too, except the team
+  choice of a teams game where players pick (custom radios mirrored into a hidden input).
 -->
 <script lang="ts">
 	import { joinGame } from '#lib/remote/game.remote.ts';
 	import { JoinGameSchema, NICKNAME_MAX_LENGTH } from '#lib/game/types.ts';
 	import { useT } from '#lib/i18n/context.ts';
 	import { common } from '#lib/i18n/common.ts';
+	import { useLocale } from '#lib/i18n/context.ts';
+	import { teamName } from '#lib/game/teams.ts';
 	import Button from '#lib/ui/Button.svelte';
 	import mark from '#lib/assets/favicon.svg';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
 	const t = useT(common);
+	const locale = useLocale();
 
 	const STORAGE_KEY = 'cw:lastNickname';
 	/** Hard cap in UTF-16 units, same as the server schema (emoji sequences are long). */
@@ -68,6 +72,27 @@
 		]
 	);
 	let submitError = $state<string | null>(null);
+
+	/** The chosen team (teams game where players pick); submitted through a hidden input. */
+	let team = $state<number | null>(null);
+	const teamFieldName = joinGame.fields.team.as('hidden', 0).name;
+
+	function pickTeam(index: number) {
+		team = index;
+		submitError = null;
+	}
+
+	/** Arrow keys move the choice between the team radios, like a native radio group. */
+	function onTeamKey(e: KeyboardEvent & { currentTarget: HTMLElement }) {
+		const teams = data.teams?.teams;
+		if (!teams) return;
+		const step = e.key === 'ArrowDown' || e.key === 'ArrowRight' ? 1 : e.key === 'ArrowUp' || e.key === 'ArrowLeft' ? -1 : 0;
+		if (!step) return;
+		e.preventDefault();
+		const next = ((team ?? (step > 0 ? -1 : 0)) + step + teams.length) % teams.length;
+		pickTeam(next);
+		e.currentTarget.querySelectorAll<HTMLElement>('[role="radio"]')[next]?.focus();
+	}
 	const formMessages = $derived(submitError ? [submitError, ...otherIssues] : otherIssues);
 
 	/** Never let a nickname grow past 16 graphemes while typing or pasting; cut gracefully. */
@@ -122,6 +147,10 @@
 
 	const enhanced = joinGame.preflight(JoinGameSchema).enhance(async (form) => {
 		submitError = null;
+		if (data.teams && team === null) {
+			submitError = t().teamRequired;
+			return;
+		}
 		const name = nick.trim();
 		try {
 			const ok = await form.submit();
@@ -190,6 +219,34 @@
 					</span>
 				</div>
 			</div>
+
+			{#if data.teams}
+				<fieldset class="teams">
+					<legend class="teams-label" id="team-label">{t().chooseTeam}</legend>
+					<!-- Keys are handled here; focus stays on the radios (roving tabindex). -->
+					<!-- svelte-ignore a11y_interactive_supports_focus -->
+					<div class="team-list" role="radiogroup" aria-labelledby="team-label" aria-required="true" onkeydown={onTeamKey}>
+						{#each data.teams.teams as option (option.index)}
+							{@const selected = team === option.index}
+							<button
+								type="button"
+								role="radio"
+								aria-checked={selected}
+								tabindex={selected || (team === null && option.index === 0) ? 0 : -1}
+								class={['team', { selected }]}
+								onclick={() => pickTeam(option.index)}
+								data-testid="team-option"
+								data-team={option.index}
+							>
+								<span class="radio" aria-hidden="true"></span>
+								<span class="team-name">{teamName(option.index, option.name, locale())}</span>
+								<span class="team-count">{t().teamPlayers(option.players)}</span>
+							</button>
+						{/each}
+					</div>
+				</fieldset>
+				<input type="hidden" name={teamFieldName} value={team ?? ''} />
+			{/if}
 
 			{#if formMessages.length}
 				<div class="alert" role="alert">
@@ -358,6 +415,66 @@
 	}
 	.count.over {
 		color: var(--color-danger);
+	}
+	.teams {
+		margin: 0;
+		padding: 0;
+		border: 0;
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
+	}
+	.teams-label {
+		padding: 0 var(--space-1);
+		font-weight: var(--weight-bold);
+	}
+	.team-list {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+		gap: var(--space-2);
+	}
+	.team {
+		display: grid;
+		grid-template-columns: auto 1fr;
+		grid-template-rows: auto auto;
+		column-gap: var(--space-3);
+		align-items: center;
+		min-height: var(--tap-target);
+		padding: var(--space-3);
+		border: 2px solid var(--color-border);
+		border-radius: var(--radius-lg);
+		background: var(--color-surface);
+		text-align: left;
+		cursor: pointer;
+		transition:
+			border-color var(--duration-fast),
+			background-color var(--duration-fast);
+	}
+	.team.selected {
+		border-color: var(--color-primary);
+		background: color-mix(in oklab, var(--color-primary) 8%, var(--color-surface));
+	}
+	.team .radio {
+		grid-row: span 2;
+		width: 1.25rem;
+		height: 1.25rem;
+		border-radius: 50%;
+		border: 2px solid var(--color-border);
+		background: var(--color-surface);
+	}
+	.team.selected .radio {
+		border-color: var(--color-primary);
+		box-shadow: inset 0 0 0 0.22rem var(--color-surface);
+		background: var(--color-primary);
+	}
+	.team-name {
+		font-weight: var(--weight-bold);
+		overflow-wrap: anywhere;
+	}
+	.team-count {
+		font-size: var(--text-sm);
+		color: var(--color-text-muted);
 	}
 	.alert {
 		padding: var(--space-3) var(--space-4);

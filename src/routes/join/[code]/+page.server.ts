@@ -4,14 +4,15 @@
  *
  * - `notFound`  no unfinished game with this code (or the code is not a valid code at all)
  * - `full`      `MAX_PLAYERS` non-kicked players already joined
- * - `open`      show the nickname form
+ * - `open`      show the nickname form (and, in a teams game where players pick, `teams`: the
+ *               teams with their player counts at page load)
  * The `joinGame` form re-checks everything (a game can fill up or end in the meantime).
  * A phone that already has a valid player token for this game is redirected to `/play/CODE`.
  */
 import { redirect } from '@sveltejs/kit';
 import * as v from 'valibot';
 import { JoinCodeSchema } from '#lib/game/types.ts';
-import { findGameByCode, isGameFull, resolvePlayer } from '#lib/server/game/engine.ts';
+import { findGameByCode, isGameFull, joinTeams, resolvePlayer } from '#lib/server/game/engine.ts';
 import { getPlayerToken } from '#lib/server/auth/index.ts';
 import type { PageServerLoad } from './$types';
 
@@ -33,5 +34,6 @@ export const load: PageServerLoad = async ({ params, cookies }) => {
 	if (await resolvePlayer(game.id, getPlayerToken(cookies, game.id))) redirect(303, `/play/${code}`);
 
 	if (await isGameFull(game.id)) return { code, state: 'full' as JoinState };
-	return { code, state: 'open' as JoinState };
+	const teams = await joinTeams(game);
+	return { code, state: 'open' as JoinState, ...(teams ? { teams } : {}) };
 };

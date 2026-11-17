@@ -8,6 +8,13 @@
       "when": 1794772082312,
       "tag": "0000_init",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1794906287224,
+      "tag": "0001_teams",
+      "breakpoints": true
     }
   ]
 }

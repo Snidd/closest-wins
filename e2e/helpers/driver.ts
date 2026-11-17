@@ -15,6 +15,8 @@ export interface CreateOptions {
 	timerSeconds?: number;
 	language?: 'sv' | 'en';
 	playlistName?: { en: string; sv: string };
+	/** A teams game: number of teams, players pick their team (default no), custom names. */
+	teams?: { count: number; pick?: boolean; names?: string[] };
 }
 
 export class GameDriver {
@@ -55,7 +57,15 @@ export class GameDriver {
 			selection: 'first',
 			shuffle: false,
 			timerSeconds: opts.timerSeconds ?? 30,
-			language: opts.language ?? 'en'
+			language: opts.language ?? 'en',
+			...(opts.teams
+				? {
+						teams: true,
+						teamCount: opts.teams.count,
+						teamPick: opts.teams.pick ?? false,
+						...Object.fromEntries((opts.teams.names ?? []).map((n, i) => [`teamNames[${i}]`, n]))
+					}
+				: {})
 		});
 		const gameId = expectRedirect(r, 'createGame').split('/').pop()!;
 		const [row] = await db()<{ joinCode: string }[]>`select join_code as "joinCode" from game where id = ${gameId}`;
@@ -86,10 +96,16 @@ export class GameDriver {
 		if (id) this.tvIds.add(id);
 	}
 
-	/** Joins a player. `connected` keeps a live player stream open (shown as online on the TV). */
-	async join(nickname: string, { connected = true }: { connected?: boolean } = {}): Promise<SimPlayer> {
+	/**
+	 * Joins a player. `connected` keeps a live player stream open (shown as online on the TV);
+	 * `team` is the team picked on the join page (teams games where players pick).
+	 */
+	async join(
+		nickname: string,
+		{ connected = true, team }: { connected?: boolean; team?: number } = {}
+	): Promise<SimPlayer> {
 		const p = new SimPlayer(this.joinCode, nickname, this.admin.baseURL);
-		await p.join({ connected: false });
+		await p.join({ connected: false, team });
 		const [row] = await db()<{ id: string; color: string }[]>`
 			select id, color from player where game_id = ${this.gameId} and nickname = ${nickname}`;
 		p.gameId = this.gameId;

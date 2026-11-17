@@ -3,6 +3,7 @@
 	import type { Locale } from '#lib/i18n/index.ts';
 	import { useT } from '#lib/i18n/context.ts';
 	import { host } from '#lib/i18n/host.ts';
+	import { gameTeamName } from '#lib/game/teams.ts';
 	import StandingsTable from './StandingsTable.svelte';
 	import { listNames, playerLookup, type HostPhase } from './types.ts';
 
@@ -12,8 +13,13 @@
 	const t = useT(host);
 	const who = $derived(playerLookup(snap.players, snap.standings));
 	const round = $derived(snap.result.round);
+	const tiedTeams = $derived(snap.next.kind === 'suddenDeath' ? snap.next.teams : undefined);
 	const tied = $derived(
-		snap.next.kind === 'suddenDeath' ? listNames(snap.next.eligiblePlayerIds.map((id) => who(id).nickname), locale) : ''
+		snap.next.kind !== 'suddenDeath'
+			? ''
+			: tiedTeams
+				? listNames(tiedTeams.map((i) => gameTeamName(snap.game, i, locale)), locale)
+				: listNames(snap.next.eligiblePlayerIds.map((id) => who(id).nickname), locale)
 	);
 	const leaders = $derived(snap.next.kind === 'suddenDeath' ? snap.next.eligiblePlayerIds : []);
 </script>
@@ -22,13 +28,13 @@
 	<h2 id="standings-title" class="eyebrow">
 		{round.isSuddenDeath ? t().afterSuddenDeath : t().afterRound(round.number, snap.game.totalRounds)}
 	</h2>
-	<StandingsTable rows={snap.standings} highlight={leaders} />
+	<StandingsTable rows={snap.standings} highlight={leaders} teams={snap.teamStandings} highlightTeams={tiedTeams} />
 </section>
 
 {#if snap.next.kind === 'suddenDeath'}
 	<section class="sd" data-testid="sudden-death-explain">
 		<span class="bolt" aria-hidden="true">⚡</span>
-		<p>{t().suddenDeathExplain(tied)}</p>
+		<p>{tiedTeams ? t().suddenDeathTeamsExplain(tied) : t().suddenDeathExplain(tied)}</p>
 	</section>
 {:else if snap.next.kind === 'finish'}
 	<p class="muted center">{t().finalNext}</p>

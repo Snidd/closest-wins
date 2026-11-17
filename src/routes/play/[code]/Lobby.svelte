@@ -1,7 +1,8 @@
 <!-- Waiting for the host: you're in, your colour, who else is here (live). -->
 <script lang="ts">
 	import { scale } from 'svelte/transition';
-	import { useT } from '#lib/i18n/context.ts';
+	import { useLocale, useT } from '#lib/i18n/context.ts';
+	import { gameTeamName } from '#lib/game/teams.ts';
 	import { common } from '#lib/i18n/common.ts';
 	import { player } from '#lib/i18n/player.ts';
 	import PlayerChip from '#lib/ui/PlayerChip.svelte';
@@ -13,6 +14,7 @@
 	let { s }: { s: Snap<'lobby'> } = $props();
 	const t = useT(player);
 	const tc = useT(common);
+	const locale = useLocale();
 
 	const others = $derived(s.players.filter((p) => p.id !== s.me.id));
 	const reduceMotion =
@@ -33,6 +35,11 @@
 			style:--me-text={textColorOn(s.me.color)}
 			data-testid="me-name">{s.me.nickname}</span
 		>
+		{#if s.me.team !== undefined}
+			<p class="my-team" data-testid="my-team" data-team={s.me.team}>
+				{t().yourTeam(gameTeamName(s.game, s.me.team, locale()))}
+			</p>
+		{/if}
 	</section>
 
 	<section class="tv">
@@ -130,6 +137,13 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+	}
+	.my-team {
+		margin-top: var(--space-2);
+		font-size: var(--text-lg);
+		font-weight: var(--weight-bold);
+		text-align: center;
+		overflow-wrap: anywhere;
 	}
 	.tv {
 		display: flex;

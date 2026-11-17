@@ -25,7 +25,7 @@
 <ul class="players" data-testid="player-list">
 	{#each players as p (p.id)}
 		{@const busy = kicking.has(p.id)}
-		<li class={['prow', { offline: !p.connected, confirming: confirming === p.id }]} data-testid="player-row" data-player={p.nickname}>
+		<li class={['prow', { offline: !p.connected, confirming: confirming === p.id }]} data-testid="player-row" data-player={p.nickname} data-team={p.team}>
 			<div class="main">
 				<span class="dot" style:background={p.color} aria-hidden="true"></span>
 				<span class="name">{p.nickname}</span>

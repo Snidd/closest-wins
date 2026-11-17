@@ -10,6 +10,7 @@
 	import { tv as tvDict } from '#lib/i18n/tv.ts';
 	import { common } from '#lib/i18n/common.ts';
 	import { localized } from '#lib/i18n/localized.ts';
+	import { gameTeamName, gameTeamNames } from '#lib/game/teams.ts';
 	import Avatar from './Avatar.svelte';
 	import JoinBug from './JoinBug.svelte';
 	import StandingsTable from './StandingsTable.svelte';
@@ -45,6 +46,7 @@
 	const tableSize = $derived<'xl' | 'lg' | 'md' | 'sm' | undefined>(
 		cols < wantCols ? (Math.ceil(n / cols) > 12 ? (Math.ceil(n / cols) > 18 ? 'sm' : 'md') : 'lg') : undefined
 	);
+	const duelTeams = $derived(next.kind === 'suddenDeath' ? next.teams : undefined);
 	const duel = $derived(
 		next.kind === 'suddenDeath' ? next.eligiblePlayerIds.map((id) => byId.get(id)).filter((p) => !!p) : []
 	);
@@ -68,6 +70,8 @@
 				highlight={result.winnerPlayerIds}
 				columns={cols}
 				size={tableSize}
+				teams={snap.teamStandings}
+				highlightTeams={result.winnerTeams}
 			/>
 		</div>
 
@@ -84,6 +88,11 @@
 						{/each}
 						{#if winKm !== null}<span class="km">· {tc().km(winKm)}</span>{/if}
 					</p>
+					{#if result.winnerTeams?.length}
+						<p class="c-line c-team" data-testid="recap-team">
+							{tc().teamTookRound(gameTeamNames(snap.game, result.winnerTeams, locale()))}
+						</p>
+					{/if}
 				{:else}
 					<p class="c-line muted">{t().nobodyGuessed}</p>
 				{/if}
@@ -101,13 +110,23 @@
 						{t().upNext}
 					</p>
 					<p class="n-big">{t().suddenDeath}</p>
-					<p class="duel" data-testid="next-duel">
-						{#each duel as p, i (p.id)}
-							{#if i > 0}<span class="vs">{t().versus}</span>{/if}
-							<span class="who"><Avatar nickname={p.nickname} color={p.color} size="1.25em" ring />{p.nickname}</span>
-						{/each}
-					</p>
-					<p class="hint">{t().duelHint}</p>
+					{#if duelTeams}
+						<p class="duel" data-testid="next-duel" data-teams={duelTeams.join(',')}>
+							{#each duelTeams as team, i (team)}
+								{#if i > 0}<span class="vs">{t().versus}</span>{/if}
+								<span class="who">{gameTeamName(snap.game, team, locale())}</span>
+							{/each}
+						</p>
+						<p class="hint">{t().duelHintTeams}</p>
+					{:else}
+						<p class="duel" data-testid="next-duel">
+							{#each duel as p, i (p.id)}
+								{#if i > 0}<span class="vs">{t().versus}</span>{/if}
+								<span class="who"><Avatar nickname={p.nickname} color={p.color} size="1.25em" ring />{p.nickname}</span>
+							{/each}
+						</p>
+						<p class="hint">{t().duelHint}</p>
+					{/if}
 				{:else}
 					<p class="c-eyebrow">{t().upNext}</p>
 					<p class="n-big trophy">
@@ -226,6 +245,10 @@
 		gap: 0.35rem;
 		font-size: 1.05rem;
 		color: var(--tv-ink-2);
+	}
+	.c-line.c-team {
+		color: var(--tv-gold);
+		font-weight: 800;
 	}
 	.c-line.muted {
 		color: var(--tv-ink-3);
