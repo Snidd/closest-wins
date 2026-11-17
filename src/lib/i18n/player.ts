@@ -130,7 +130,13 @@ export const player = defineDict({
 		youFinished: (place: string, total: number) => `You finished ${place} of ${total}`,
 		endedEarly: 'The host ended the game early.',
 		thanksForPlaying: 'Thanks for playing!',
-		finalStandings: 'Final standings'
+		finalStandings: 'Final standings',
+		// Teams
+		yourTeam: (team: string) => `You’re on ${team}`,
+		yourTeamTookRound: 'Your team took the round!',
+		yourTeamWon: 'Your team won!',
+		yourTeamSharedWin: 'Your team shares the win!',
+		yourTeamFinished: (place: string, total: number) => `Your team finished ${place} of ${total}`
 	},
 	sv: {
 		distance: (km) => formatDistance(km, 'sv-SE'),
@@ -236,6 +242,11 @@ export const player = defineDict({
 		youFinished: (place, total) => `Du kom ${place} av ${total}`,
 		endedEarly: 'Värden avslutade spelet i förtid.',
 		thanksForPlaying: 'Tack för att du var med!',
-		finalStandings: 'Slutställning'
+		finalStandings: 'Slutställning',
+		yourTeam: (team) => `Du är med i ${team}`,
+		yourTeamTookRound: 'Ditt lag tog rundan!',
+		yourTeamWon: 'Ditt lag vann!',
+		yourTeamSharedWin: 'Ditt lag delar vinsten!',
+		yourTeamFinished: (place, total) => `Ditt lag kom ${place} av ${total}`
 	}
 });

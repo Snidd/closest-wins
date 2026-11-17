@@ -1,6 +1,7 @@
 <!--
   Lobby: the join QR (black on white, big enough to scan from the sofa), the code and short URL
-  for those who type, the playlist, and players popping in live (fits 40).
+  for those who type, the playlist, and players popping in live (fits 40). In a teams game the
+  players appear under their team's heading (every team, empty ones included).
 -->
 <script lang="ts">
 	import QrCode from '#lib/ui/QrCode.svelte';
@@ -9,6 +10,7 @@
 	import { tv as tvDict } from '#lib/i18n/tv.ts';
 	import { common } from '#lib/i18n/common.ts';
 	import { localized } from '#lib/i18n/localized.ts';
+	import { teamName } from '#lib/game/teams.ts';
 	import Avatar from './Avatar.svelte';
 	import Logo from './Logo.svelte';
 	import { shortJoinUrl } from './tv.svelte.ts';
@@ -57,7 +59,32 @@
 				<span class="lbl">{tc().players}</span>
 				<span class="max">/ {MAX_PLAYERS}</span>
 			</div>
-			{#if n === 0}
+			{#if snap.game.teams}
+				<div class="teams" data-testid="lobby-teams">
+					{#each snap.game.teams as team (team.index)}
+						{@const members = players.filter((p) => p.team === team.index)}
+						<section class="team" data-testid="lobby-team" data-team={team.index}>
+							<h2 class="team-name" data-testid="team-heading">
+								{teamName(team.index, team.name, locale())}
+								<span class="team-count">{members.length}</span>
+							</h2>
+							<ul class={['players', 'in-team', tier]}>
+								{#each members as p (p.id)}
+									<li
+										class={['player', { offline: !p.connected }]}
+										data-testid="lobby-player"
+										data-player-id={p.id}
+										data-team={p.team}
+									>
+										<Avatar nickname={p.nickname} color={p.color} size="1.7em" offline={!p.connected} />
+										<span class="name">{p.nickname}</span>
+									</li>
+								{/each}
+							</ul>
+						</section>
+					{/each}
+				</div>
+			{:else if n === 0}
 				<p class="empty">{t().waitingForPlayers}</p>
 			{:else}
 				<ul class={['players', tier]} data-testid="lobby-players">
@@ -288,6 +315,42 @@
 	}
 	.offline .name {
 		color: var(--tv-ink-3);
+	}
+
+	.teams {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+		gap: 1.6vh 1.6vw;
+		align-content: start;
+		min-height: 0;
+	}
+	.team {
+		display: flex;
+		flex-direction: column;
+		gap: 1vh;
+		min-width: 0;
+		padding: 1.4vh 1vw;
+		border-radius: 1rem;
+		background: rgb(255 255 255 / 0.05);
+	}
+	.team-name {
+		display: flex;
+		align-items: baseline;
+		gap: 0.6rem;
+		font-size: 1.5rem;
+		font-weight: 850;
+		letter-spacing: -0.01em;
+		overflow-wrap: anywhere;
+	}
+	.team-count {
+		font-size: 1rem;
+		font-weight: 700;
+		color: var(--tv-ink-3);
+		font-variant-numeric: tabular-nums;
+	}
+	.players.in-team {
+		--col: 100%;
+		font-size: min(1em, 1.2rem);
 	}
 
 	.waiting {

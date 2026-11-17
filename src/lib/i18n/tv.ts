@@ -74,7 +74,9 @@ export const tv = defineDict({
 		finalStandings: 'Final standings',
 		nextGame: 'New game? Pair with',
 
-		reconnecting: 'Reconnecting…'
+		reconnecting: 'Reconnecting…',
+		// Teams
+		duelHintTeams: 'Only the tied teams’ players guess. Closest takes the game for their team.'
 	},
 	sv: {
 		pairingTitle: 'Para ihop skärmen',
@@ -147,6 +149,7 @@ export const tv = defineDict({
 		finalStandings: 'Slutställning',
 		nextGame: 'Nytt spel? Para ihop med',
 
-		reconnecting: 'Återansluter…'
+		reconnecting: 'Återansluter…',
+		duelHintTeams: 'Bara spelarna i lagen som delar ledningen gissar. Närmast vinner spelet åt sitt lag.'
 	}
 });

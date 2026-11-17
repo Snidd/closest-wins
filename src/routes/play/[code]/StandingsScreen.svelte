@@ -1,6 +1,7 @@
 <!-- Between rounds: what comes next, the player's last round in brief, and the table. -->
 <script lang="ts">
-	import { useT } from '#lib/i18n/context.ts';
+	import { useLocale, useT } from '#lib/i18n/context.ts';
+	import { gameTeamName } from '#lib/game/teams.ts';
 	import { player } from '#lib/i18n/player.ts';
 	import Shell from './Shell.svelte';
 	import RoundOutcome from './RoundOutcome.svelte';
@@ -9,11 +10,20 @@
 
 	let { s }: { s: Snap<'standings'> } = $props();
 	const t = useT(player);
+	const locale = useLocale();
 
 	const nick = (id: string) => s.players.find((p) => p.id === id)?.nickname ?? '?';
 	const next = $derived(s.next);
 	const inSuddenDeath = $derived(next.kind === 'suddenDeath' && next.eligiblePlayerIds.includes(s.me.id));
 	const r = $derived(s.result.round);
+	/** Who plays sudden death: the tied teams in a teams game, else the tied players. */
+	const tied = $derived(
+		next.kind !== 'suddenDeath'
+			? ''
+			: next.teams
+				? t().list(next.teams.map((i) => gameTeamName(s.game, i, locale())))
+				: t().list(next.eligiblePlayerIds.map(nick))
+	);
 	const caption = $derived(r.isSuddenDeath ? t().afterSuddenDeath : t().afterRound(r.number));
 </script>
 
@@ -27,14 +37,14 @@
 			{#if inSuddenDeath}
 				{t().nextSuddenDeathIn}
 			{:else}
-				{t().nextSuddenDeathOut(t().list(next.eligiblePlayerIds.map(nick)))}
+				{t().nextSuddenDeathOut(tied)}
 			{/if}
 		{:else}
 			{t().nextFinish}
 		{/if}
 	</p>
 
-	<StandingsTable rows={s.standings} meId={s.me.id} {caption} />
+	<StandingsTable rows={s.standings} meId={s.me.id} {caption} teams={s.teamStandings} myTeam={s.me.team} />
 
 	<div class="last">
 		<h2>{t().yourRound}</h2>

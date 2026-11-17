@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { common } from '../../src/lib/i18n/common.ts';
 import { tv } from '../../src/lib/i18n/tv.ts';
-import { buildShared, renderMessage, SHARED_JSON_PATH, serializeShared } from './shared.ts';
+import { buildShared, renderMessage, SHARED_JSON_PATH, serializeShared, WEB_ONLY } from './shared.ts';
 
 describe('tvos shared.json', () => {
 	it('is up to date with the web code', () => {
@@ -26,7 +26,7 @@ describe('tvos shared.json', () => {
 		expect(renderMessage(strings.common!.sv.km!, { km: 3.25 }, 'sv')).toBe(common.sv.km(3.25));
 	});
 
-	it('exports every TV and common message in both languages (except the listed omissions)', () => {
+	it('exports every TV and common message in both languages (except the listed omissions and web-only ones)', () => {
 		const shared = buildShared();
 		const omitted = new Set(shared.omittedStrings.map((o) => `${o.dict}.${o.key}`));
 		for (const [name, dict] of [
@@ -34,7 +34,9 @@ describe('tvos shared.json', () => {
 			['common', common]
 		] as const) {
 			for (const locale of ['en', 'sv'] as const) {
-				const expected = Object.keys(dict[locale]).filter((k) => !omitted.has(`${name}.${k}`));
+				const expected = Object.keys(dict[locale]).filter(
+					(k) => !omitted.has(`${name}.${k}`) && !WEB_ONLY[name]?.has(k)
+				);
 				expect(Object.keys(shared.strings[name]![locale])).toEqual(expected);
 			}
 		}

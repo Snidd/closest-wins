@@ -4,9 +4,10 @@
 -->
 <script lang="ts">
 	import type { RoundState, TvSnapshot } from '#lib/game/types.ts';
-	import { useT } from '#lib/i18n/context.ts';
+	import { useLocale, useT } from '#lib/i18n/context.ts';
 	import { tv as tvDict } from '#lib/i18n/tv.ts';
 	import { common } from '#lib/i18n/common.ts';
+	import { gameTeamName } from '#lib/game/teams.ts';
 	import Avatar from './Avatar.svelte';
 	import Clue from './Clue.svelte';
 	import JoinBug from './JoinBug.svelte';
@@ -17,12 +18,19 @@
 	let { snap, offsetMs, now }: Props = $props();
 	const t = useT(tvDict);
 	const tc = useT(common);
+	const locale = useLocale();
 
 	const round = $derived(snap.round);
 	const sd = $derived(round.isSuddenDeath);
 	// In the engine's order (standings order), like the host and the phones.
 	const duellists = $derived(
 		sd ? round.eligiblePlayerIds.map((id) => snap.players.find((p) => p.id === id)).filter((p) => p !== undefined) : []
+	);
+	/** Teams game: the tied teams playing the sudden death (the duellists' teams). */
+	const duelTeams = $derived(
+		sd && snap.game.teams
+			? [...new Set(duellists.flatMap((p) => (p.team === undefined ? [] : [p.team])))].sort((a, b) => a - b)
+			: []
 	);
 	const totalSec = $derived((round.endsAt - round.startedAt) / 1000);
 	const urgentBelow = $derived(Math.min(10, Math.max(3, Math.floor(totalSec / 3))));
@@ -42,15 +50,24 @@
 					<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 4 14h6l-1 8 9-12h-6z" /></svg>
 					{t().suddenDeath}{round.number > 1 ? ` ${round.number}` : ''}
 				</p>
-				<p class="duel" data-testid="duel">
-					{#each duellists as p, i (p.id)}
-						{#if i > 0}<span class="vs">{t().versus}</span>{/if}
-						<span class="duellist" style:--c={p.color}>
-							<Avatar nickname={p.nickname} color={p.color} size="1.2em" ring />
-							<span class="dn">{p.nickname}</span>
-						</span>
-					{/each}
-				</p>
+				{#if duelTeams.length}
+					<p class="duel" data-testid="duel" data-teams={duelTeams.join(',')}>
+						{#each duelTeams as team, i (team)}
+							{#if i > 0}<span class="vs">{t().versus}</span>{/if}
+							<span class="dn team-duel">{gameTeamName(snap.game, team, locale())}</span>
+						{/each}
+					</p>
+				{:else}
+					<p class="duel" data-testid="duel">
+						{#each duellists as p, i (p.id)}
+							{#if i > 0}<span class="vs">{t().versus}</span>{/if}
+							<span class="duellist" style:--c={p.color}>
+								<Avatar nickname={p.nickname} color={p.color} size="1.2em" ring />
+								<span class="dn">{p.nickname}</span>
+							</span>
+						{/each}
+					</p>
+				{/if}
 			{:else}
 				<p class="eyebrow">{tc().round}</p>
 				<p class="round-no" data-testid="round-label">
@@ -81,7 +98,13 @@
 	</div>
 
 	<footer class="foot">
-		<PlayersBar players={snap.players} lockedIds={snap.lockedPlayerIds} eligibleIds={round.eligiblePlayerIds} duel={sd} />
+		<PlayersBar
+			players={snap.players}
+			lockedIds={snap.lockedPlayerIds}
+			eligibleIds={round.eligiblePlayerIds}
+			duel={sd}
+			teams={snap.game.teams}
+		/>
 	</footer>
 </section>
 
@@ -219,6 +242,10 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+	}
+	.team-duel {
+		max-width: 14em;
+		color: var(--tv-ink);
 	}
 	.vs {
 		font-size: 0.6em;

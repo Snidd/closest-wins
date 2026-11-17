@@ -7,6 +7,7 @@
 	import { useT } from '#lib/i18n/context.ts';
 	import { common } from '#lib/i18n/common.ts';
 	import { host } from '#lib/i18n/host.ts';
+	import { gameTeamName } from '#lib/game/teams.ts';
 	import { listNames, playerLookup, type HostPhase } from './types.ts';
 
 	type Props = { snap: HostPhase<'reveal'>; locale: Locale; revealDone: boolean; progress: number };
@@ -23,6 +24,9 @@
 	const credit = $derived(result.round.clue.photo);
 	const winnerNames = $derived(result.winnerPlayerIds.map((id) => who(id).nickname));
 	const best = $derived(result.guesses.find((g) => g.isWinner));
+	const winnerTeams = $derived(
+		result.winnerTeams?.length ? listNames(result.winnerTeams.map((i) => gameTeamName(snap.game, i, locale)), locale) : ''
+	);
 </script>
 
 <section class={['tv-progress', { done: revealDone }]} aria-live="polite" data-testid="reveal-progress">
@@ -47,7 +51,7 @@
 	{/if}
 </section>
 
-<section class="winner" data-testid="round-winner">
+<section class="winner" data-testid="round-winner" data-winner-teams={result.winnerTeams?.join(',')}>
 	{#if winnerNames.length === 0}
 		<p class="w-text muted">{t().nobodyGuessed}</p>
 	{:else}
@@ -55,6 +59,7 @@
 		<p class="w-text">
 			{winnerNames.length === 1 ? t().roundWinner(winnerNames[0]!) : t().roundTie(listNames(winnerNames, locale))}
 			{#if best}<span class="w-km">{c().km(best.distanceKm)}</span>{/if}
+			{#if winnerTeams}<span class="w-team" data-testid="round-winner-teams">{c().teamTookRound(winnerTeams)}</span>{/if}
 		</p>
 	{/if}
 </section>
@@ -169,6 +174,11 @@
 		font-size: var(--text-sm);
 		font-weight: var(--weight-medium);
 		color: var(--color-text-muted);
+	}
+	.w-team {
+		display: block;
+		font-size: var(--text-md);
+		font-weight: var(--weight-bold);
 	}
 	.card {
 		display: flex;

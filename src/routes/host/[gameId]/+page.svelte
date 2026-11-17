@@ -40,6 +40,7 @@
 	import StandingsView from './StandingsView.svelte';
 	import FinishedView from './FinishedView.svelte';
 	import MenuSheet from './MenuSheet.svelte';
+	import { gameTeamName } from '#lib/game/teams.ts';
 	import { listNames, playerLookup } from './types.ts';
 
 	const t = useT(host);
@@ -297,6 +298,10 @@
 		if (snap?.phase !== 'standings') return '';
 		const next = snap.next;
 		if (next.kind === 'round') return t().nextRoundN(next.number);
+		if (next.kind === 'suddenDeath' && next.teams) {
+			const game = snap.game;
+			return `${t().startSuddenDeath}: ${listNames(next.teams.map((i) => gameTeamName(game, i, locale())), locale())}`;
+		}
 		if (next.kind === 'suddenDeath') {
 			const who = playerLookup(snap.players, snap.standings);
 			return `${t().startSuddenDeath}: ${listNames(next.eligiblePlayerIds.map((id) => who(id).nickname), locale())}`;

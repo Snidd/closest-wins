@@ -1,8 +1,13 @@
-<!-- Game over: the winner(s), the final table and a note that the TV can be re-paired. -->
+<!--
+  Game over: the winner(s), the final table and a note that the TV can be re-paired. In a teams
+  game the winning team(s) and their members.
+-->
 <script lang="ts">
 	import type { Locale } from '#lib/i18n/index.ts';
 	import { useT } from '#lib/i18n/context.ts';
+	import { common } from '#lib/i18n/common.ts';
 	import { host } from '#lib/i18n/host.ts';
+	import { gameTeamName } from '#lib/game/teams.ts';
 	import StandingsTable from './StandingsTable.svelte';
 	import { listNames, playerLookup, type HostPhase } from './types.ts';
 
@@ -10,22 +15,34 @@
 	let { snap, locale }: Props = $props();
 
 	const t = useT(host);
+	const c = useT(common);
 	const who = $derived(playerLookup(snap.players, snap.standings));
 	const names = $derived(snap.winnerPlayerIds.map((id) => who(id).nickname));
+	const teamNames = $derived((snap.winnerTeams ?? []).map((i) => gameTeamName(snap.game, i, locale)));
 </script>
 
-<section class="hero" data-testid="final-winner">
+<section class="hero" data-testid="final-winner" data-winner-teams={snap.winnerTeams?.join(',')}>
 	<span class="trophy" aria-hidden="true">🏆</span>
-	<h2>
-		{names.length === 0 ? t().noWinner : names.length === 1 ? t().winnerIs(names[0]!) : t().sharedWin(listNames(names, locale))}
-	</h2>
+	{#if snap.winnerTeams && teamNames.length}
+		<h2>{teamNames.length === 1 ? c().teamWins(teamNames[0]!) : c().teamsShareWin(listNames(teamNames, locale))}</h2>
+		<p class="members" data-testid="winner-members">{listNames(names, locale)}</p>
+	{:else}
+		<h2>
+			{names.length === 0 ? t().noWinner : names.length === 1 ? t().winnerIs(names[0]!) : t().sharedWin(listNames(names, locale))}
+		</h2>
+	{/if}
 	{#if snap.endedEarly}<p class="muted">{t().endedEarly}</p>{/if}
 </section>
 
 {#if snap.standings.length}
 	<section class="card" aria-labelledby="final-title">
 		<h3 id="final-title" class="eyebrow">{t().finalStandings}</h3>
-		<StandingsTable rows={snap.standings} highlight={snap.winnerPlayerIds} />
+		<StandingsTable
+			rows={snap.standings}
+			highlight={snap.winnerPlayerIds}
+			teams={snap.teamStandings}
+			highlightTeams={snap.winnerTeams}
+		/>
 	</section>
 {/if}
 
@@ -56,6 +73,10 @@
 	}
 	h2 {
 		font-size: var(--text-3xl);
+		text-wrap: balance;
+	}
+	.members {
+		font-weight: var(--weight-medium);
 		text-wrap: balance;
 	}
 	.card {

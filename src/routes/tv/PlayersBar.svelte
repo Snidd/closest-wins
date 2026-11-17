@@ -2,10 +2,12 @@
   The row of players during a round: who has locked in (bright, check), who is still thinking
   (muted) and who is disconnected (grey). In sudden death the duellists are shown big and the
   rest as a small "watching" group. Sizes step down with the number of players (fits 40).
+  In a teams game (`teams`) each chip also names the player's team.
 -->
 <script lang="ts">
-	import type { PlayerSummary } from '#lib/game/types.ts';
-	import { useT } from '#lib/i18n/context.ts';
+	import type { PlayerSummary, TeamInfo } from '#lib/game/types.ts';
+	import { teamName } from '#lib/game/teams.ts';
+	import { useLocale, useT } from '#lib/i18n/context.ts';
 	import { tv as tvDict } from '#lib/i18n/tv.ts';
 	import Avatar from './Avatar.svelte';
 
@@ -16,9 +18,14 @@
 		eligibleIds: string[];
 		/** Sudden death: the few duellists get big chips. */
 		duel?: boolean;
+		/** The game's teams (teams game only). */
+		teams?: TeamInfo[];
 	};
-	let { players, lockedIds, eligibleIds, duel = false }: Props = $props();
+	let { players, lockedIds, eligibleIds, duel = false, teams }: Props = $props();
 	const t = useT(tvDict);
+	const locale = useLocale();
+	const teamOf = (p: PlayerSummary) =>
+		teams && p.team !== undefined ? teamName(p.team, teams.find((x) => x.index === p.team)?.name, locale()) : null;
 
 	const locked = $derived(new Set(lockedIds));
 	const eligible = $derived(new Set(eligibleIds));
@@ -37,6 +44,7 @@
 	<ul class={['chips', tier]}>
 		{#each playing as p (p.id)}
 			{@const isLocked = locked.has(p.id)}
+			{@const team = teamOf(p)}
 			<li
 				class={['chip', { locked: isLocked, offline: !p.connected }]}
 				data-testid="round-player"
@@ -57,7 +65,14 @@
 						>
 					{/if}
 				</span>
-				<span class="name">{p.nickname}</span>
+				{#if team}
+					<span class="who">
+						<span class="name">{p.nickname}</span>
+						<span class="team" data-testid="player-team" data-team={p.team}>{team}</span>
+					</span>
+				{:else}
+					<span class="name">{p.nickname}</span>
+				{/if}
 			</li>
 		{/each}
 	</ul>
@@ -215,6 +230,20 @@
 	}
 	.name {
 		font-weight: 700;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.who {
+		display: flex;
+		flex-direction: column;
+		min-width: 0;
+		line-height: 1.1;
+	}
+	.team {
+		font-size: 0.68em;
+		font-weight: 650;
+		color: var(--tv-ink-2);
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;

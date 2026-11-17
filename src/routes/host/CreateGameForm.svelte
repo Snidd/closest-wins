@@ -7,7 +7,17 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { createGame } from '#lib/remote/game.remote.ts';
-	import { MAX_ROUNDS, TIMER_MAX_SECONDS, TIMER_MIN_SECONDS } from '#lib/game/types.ts';
+	import * as v from 'valibot';
+	import {
+		MAX_ROUNDS,
+		MAX_TEAMS,
+		MIN_TEAMS,
+		TEAM_NAME_MAX_LENGTH,
+		TeamNameSchema,
+		TIMER_MAX_SECONDS,
+		TIMER_MIN_SECONDS
+	} from '#lib/game/types.ts';
+	import { teamName } from '#lib/game/teams.ts';
 	import type { PlaylistSummary } from '#lib/server/content/index.ts';
 	import { localized, type Locale } from '#lib/i18n/index.ts';
 	import { useLocale, useT } from '#lib/i18n/context.ts';
@@ -16,6 +26,7 @@
 	import Button from '#lib/ui/Button.svelte';
 	import Stepper from './Stepper.svelte';
 	import Segmented from './Segmented.svelte';
+	import Toggle from './Toggle.svelte';
 
 	type Props = { playlists: PlaylistSummary[] };
 	let { playlists }: Props = $props();
@@ -36,6 +47,11 @@
 	// svelte-ignore state_referenced_locally
 	let language = $state<Locale>(locale());
 	let submitError = $state<string | null>(null);
+	let teams = $state(false);
+	let teamCountText = $state(String(MIN_TEAMS));
+	/** One entry per possible team; only the first `teamCount` are shown and submitted. */
+	let teamNameTexts = $state<string[]>(Array.from({ length: MAX_TEAMS }, () => ''));
+	let teamPick = $state(false);
 
 	const selected = $derived(playlists.find((p) => p.id === selectedId) ?? null);
 	const maxRounds = $derived(selected ? Math.min(selected.locationCount, MAX_ROUNDS) : MAX_ROUNDS);
@@ -47,7 +63,18 @@
 	const secondsValid = $derived(
 		Number.isInteger(seconds) && seconds >= TIMER_MIN_SECONDS && seconds <= TIMER_MAX_SECONDS
 	);
-	const canSubmit = $derived(!!selected && roundsValid && secondsValid);
+	const teamCount = $derived(parseIntStrict(teamCountText));
+	const teamCountValid = $derived(Number.isInteger(teamCount) && teamCount >= MIN_TEAMS && teamCount <= MAX_TEAMS);
+	const shownTeams = $derived(teamCountValid ? teamCount : 0);
+	/** The shared schema's message for a team name, in the host's language (null when valid). */
+	function teamNameError(name: string): string | null {
+		const parsed = v.safeParse(TeamNameSchema, name);
+		if (parsed.success) return null;
+		return parsed.issues[0].message === 'Invalid characters' ? t().teamNameInvalid : t().teamNameTooLong(TEAM_NAME_MAX_LENGTH);
+	}
+	const teamNameErrors = $derived(teamNameTexts.slice(0, shownTeams).map(teamNameError));
+	const teamsValid = $derived(!teams || (teamCountValid && teamNameErrors.every((e) => e === null)));
+	const canSubmit = $derived(!!selected && roundsValid && secondsValid && teamsValid);
 
 	const roundPresets = $derived(
 		[
@@ -104,8 +131,12 @@
 		selection: f.selection.as('hidden', 'first').name,
 		timerSeconds: f.timerSeconds.as('hidden', 0).name,
 		language: f.language.as('hidden', 'en').name,
-		shuffle: f.shuffle.as('checkbox').name
+		shuffle: f.shuffle.as('checkbox').name,
+		teams: f.teams.as('checkbox').name,
+		teamCount: f.teamCount.as('hidden', 0).name,
+		teamPick: f.teamPick.as('checkbox').name
 	});
+	const teamNameField = (i: number) => f.teamNames[i]!.as('hidden', '').name;
 	const serverIssues = $derived([...new Set((f.allIssues() ?? []).map((i) => i.message))]);
 
 	const enhanced = createGame.enhance(async ({ submit }) => {
@@ -206,6 +237,42 @@
 				increaseLabel={t().increase}
 			/>
 
+			<fieldset class="teams" data-testid="teams-section">
+				<legend class="visually-hidden">{t().teams}</legend>
+				<Toggle label={t().teamsOn} hint={t().teamsHint} bind:checked={teams} testid="teams-toggle" />
+				{#if teams}
+					<Stepper
+						id="team-count"
+						label={t().teamCount}
+						bind:value={teamCountText}
+						min={MIN_TEAMS}
+						max={MAX_TEAMS}
+						error={teamCountValid ? null : t().teamCountRange(MIN_TEAMS, MAX_TEAMS)}
+						decreaseLabel={t().decrease}
+						increaseLabel={t().increase}
+					/>
+					<div class="team-names">
+						{#each { length: shownTeams } as _, i (i)}
+							{@const error = teamNameErrors[i]}
+							<label class="team-name">
+								<span class="visually-hidden">{t().teamNameLabel(i + 1)}</span>
+								<input
+									type="text"
+									bind:value={teamNameTexts[i]}
+									placeholder={teamName(i, null, locale())}
+									autocomplete="off"
+									maxlength={80}
+									aria-invalid={!!error || undefined}
+									data-testid="team-name-input"
+								/>
+								{#if error}<span class="team-error" role="alert">{error}</span>{/if}
+							</label>
+						{/each}
+					</div>
+					<Toggle label={t().teamPick} hint={t().teamPickHint} bind:checked={teamPick} testid="team-pick-toggle" />
+				{/if}
+			</fieldset>
+
 			<Segmented
 				label={t().tvLanguage}
 				hint={t().tvLanguageHint}
@@ -225,6 +292,14 @@
 	<input type="hidden" name={names.timerSeconds} value={secondsValid ? seconds : ''} />
 	<input type="hidden" name={names.language} value={language} />
 	<input type="checkbox" hidden name={names.shuffle} checked={shuffle} />
+	<input type="checkbox" hidden name={names.teams} checked={teams} />
+	{#if teams}
+		<input type="hidden" name={names.teamCount} value={teamCountValid ? teamCount : ''} />
+		{#each { length: shownTeams } as _, i (i)}
+			<input type="hidden" name={teamNameField(i)} value={teamNameTexts[i]} />
+		{/each}
+		<input type="checkbox" hidden name={names.teamPick} checked={teamPick} />
+	{/if}
 
 	<div class="dock">
 		{#if submitError || serverIssues.length}
@@ -348,6 +423,47 @@
 		border-radius: var(--radius-lg);
 		background: var(--color-surface);
 		box-shadow: var(--shadow-sm);
+	}
+	.teams {
+		margin: 0;
+		padding: 0;
+		border: 0;
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-4);
+	}
+	.team-names {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+		gap: var(--space-2);
+	}
+	.team-name {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-1);
+	}
+	.team-name input {
+		width: 100%;
+		min-height: 2.75rem;
+		padding: 0 var(--space-3);
+		border: 2px solid var(--color-border);
+		border-radius: var(--radius-md);
+		background: var(--color-surface);
+		font-size: max(1rem, 16px);
+		font-weight: var(--weight-bold);
+	}
+	.team-name input:focus {
+		border-color: var(--color-primary);
+		outline: none;
+	}
+	.team-name input[aria-invalid='true'] {
+		border-color: var(--color-danger);
+	}
+	.team-error {
+		color: var(--color-danger);
+		font-size: var(--text-sm);
+		font-weight: var(--weight-medium);
 	}
 	.dock {
 		position: sticky;

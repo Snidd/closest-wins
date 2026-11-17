@@ -1,10 +1,12 @@
 <!--
   Game over: the winner celebration (single, shared or nobody), the final table, and the next
   pairing code tucked in a corner so the host can pair this screen with their next game.
+  In a teams game the winning team(s) are named, with their members on the podium.
 -->
 <script lang="ts">
 	import type { FinishedState, TvSnapshot } from '#lib/game/types.ts';
-	import { useT } from '#lib/i18n/context.ts';
+	import { useLocale, useT } from '#lib/i18n/context.ts';
+	import { gameTeamNames } from '#lib/game/teams.ts';
 	import { tv as tvDict } from '#lib/i18n/tv.ts';
 	import { common } from '#lib/i18n/common.ts';
 	import Avatar from './Avatar.svelte';
@@ -15,22 +17,35 @@
 	let { snap, host }: { snap: TvSnapshot & FinishedState; host: string } = $props();
 	const t = useT(tvDict);
 	const tc = useT(common);
+	const locale = useLocale();
 
 	const rowsById = $derived(new Map(snap.standings.map((r) => [r.playerId, r])));
 	const winners = $derived(snap.winnerPlayerIds.map((id) => rowsById.get(id)).filter((r) => !!r));
-	const kind = $derived(winners.length === 0 ? 'none' : winners.length === 1 ? 'single' : 'shared');
+	/** Teams game: the winning teams decide single / shared / none; the podium shows their members. */
+	const winnerTeams = $derived(snap.winnerTeams);
+	const teamRow = $derived(snap.teamStandings?.find((r) => r.team === winnerTeams?.[0]));
+	const kind = $derived.by(() => {
+		const n = winnerTeams ? (winners.length ? winnerTeams.length : 0) : winners.length;
+		return n === 0 ? 'none' : n === 1 ? 'single' : 'shared';
+	});
 	const confettiColors = $derived(
 		winners.length ? [...winners.map((w) => w.color), '#ffc23d', '#ffffff'] : []
 	);
 	const code = $derived(snap.nextPairing?.pairingCode ?? null);
 	const nameSize = $derived.by(() => {
 		const longest = Math.max(0, ...winners.map((w) => w.nickname.length));
+		if (winnerTeams) return winners.length <= 2 ? 2.6 : winners.length <= 4 ? 2 : 1.5;
 		if (kind === 'single') return longest <= 8 ? 6 : longest <= 12 ? 4.8 : 3.8;
 		return longest <= 8 ? 3 : 2.4;
 	});
 </script>
 
-<section class={['finished', kind]} data-testid="finished-screen" data-winners={snap.winnerPlayerIds.join(',')}>
+<section
+	class={['finished', kind, { teams: !!winnerTeams }]}
+	data-testid="finished-screen"
+	data-winners={snap.winnerPlayerIds.join(',')}
+	data-winner-teams={winnerTeams?.join(',')}
+>
 	{#if kind !== 'none'}<Confetti colors={confettiColors} />{/if}
 
 	<div class="hero" data-testid="game-winner">
@@ -46,20 +61,28 @@
 			<h1 class="headline">{t().noWinner}</h1>
 			<p class="sub">{t().noWinnerHint}</p>
 		{:else}
+			{#if winnerTeams}
+				<p class="team-champ" data-testid="winner-team">{gameTeamNames(snap.game, winnerTeams, locale())}</p>
+			{/if}
 			<div class="podium">
 				{#each winners as w, i (w.playerId)}
 					<div class="champ" style:--c={w.color} style:--i={i}>
 						<span class="halo" aria-hidden="true"></span>
 						<svg class="crown" viewBox="0 0 24 18" aria-hidden="true"><path d="M2 16h20l1-11-6 4-5-8-5 8-6-4z" /></svg>
-						<Avatar nickname={w.nickname} color={w.color} size={kind === 'single' ? 'min(11rem, 24vh)' : 'min(7rem, 16vh)'} ring />
+						<Avatar
+							nickname={w.nickname}
+							color={w.color}
+							size={winnerTeams ? 'min(5rem, 11vh)' : kind === 'single' ? 'min(11rem, 24vh)' : 'min(7rem, 16vh)'}
+							ring
+						/>
 						<span class="champ-name" style:font-size="{nameSize}rem">{w.nickname}</span>
 					</div>
 				{/each}
 			</div>
 			<h1 class="headline">{kind === 'single' ? t().winsGame : t().sharedVictory}</h1>
 			<p class="sub stats">
-				{t().roundsWon(winners[0]!.roundsWon)}
-				{#if kind === 'single' && winners[0]!.guessedRounds}
+				{t().roundsWon(teamRow?.roundsWon ?? winners[0]!.roundsWon)}
+				{#if kind === 'single' && !winnerTeams && winners[0]!.guessedRounds}
 					· {t().totalKm(tc().km(winners[0]!.totalDistanceKm))}
 				{/if}
 			</p>
@@ -69,7 +92,15 @@
 
 	<aside class="final">
 		<p class="f-title">{t().finalStandings}</p>
-		<StandingsTable rows={snap.standings} highlight={snap.winnerPlayerIds} max={snap.standings.length > 9 ? 8 : 9} columns={1} size={snap.standings.length <= 6 ? 'lg' : 'md'} />
+		<StandingsTable
+			rows={snap.standings}
+			highlight={snap.winnerPlayerIds}
+			max={snap.standings.length > 9 ? 8 : 9}
+			columns={snap.teamStandings ? 2 : 1}
+			size={snap.standings.length <= 6 ? 'lg' : 'md'}
+			teams={snap.teamStandings}
+			highlightTeams={winnerTeams}
+		/>
 	</aside>
 
 	<footer class="corner">
@@ -129,6 +160,22 @@
 		align-items: flex-end;
 		gap: 3vw;
 		margin: 9vh 0 1vh;
+	}
+	.team-champ {
+		margin-top: 6vh;
+		font-size: clamp(2.6rem, 10vh, 5.2rem);
+		font-weight: 900;
+		letter-spacing: -0.03em;
+		line-height: 1.05;
+		color: var(--tv-gold);
+		overflow-wrap: anywhere;
+		text-wrap: balance;
+		animation: rise 800ms 200ms var(--ease-out) both;
+	}
+	.teams .podium {
+		flex-wrap: wrap;
+		gap: 1.5vh 2vw;
+		margin-top: 3vh;
 	}
 	.champ {
 		position: relative;

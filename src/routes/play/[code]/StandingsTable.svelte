@@ -1,47 +1,107 @@
-<!-- Standings: place, player, rounds won, total distance; the phone owner's row stands out. -->
+<!--
+  Standings: place, player, rounds won, total distance; the phone owner's row stands out.
+  In a teams game (`teams`): one block per team (place, name, rounds won) with its members
+  inside it; the player's own team and own row stand out, `winnerTeams` get the gold place.
+-->
 <script lang="ts">
-	import type { StandingRow } from '#lib/game/types.ts';
-	import { useT } from '#lib/i18n/context.ts';
+	import type { StandingRow, TeamStandingRow } from '#lib/game/types.ts';
+	import { teamName } from '#lib/game/teams.ts';
+	import { useLocale, useT } from '#lib/i18n/context.ts';
 	import { common } from '#lib/i18n/common.ts';
 	import { player } from '#lib/i18n/player.ts';
 
-	type Props = { rows: StandingRow[]; meId: string; winnerIds?: string[]; caption: string };
-	let { rows, meId, winnerIds = [], caption }: Props = $props();
+	type Props = {
+		rows: StandingRow[];
+		meId: string;
+		winnerIds?: string[];
+		caption: string;
+		teams?: TeamStandingRow[];
+		myTeam?: number;
+		winnerTeams?: number[];
+	};
+	let { rows, meId, winnerIds = [], caption, teams, myTeam, winnerTeams = [] }: Props = $props();
 	const t = useT(player);
 	const tc = useT(common);
+	const locale = useLocale();
 </script>
 
-<table class="standings" data-testid="standings">
-	<caption>{caption}</caption>
-	<thead>
-		<tr>
-			<th scope="col" class="rank"><span class="visually-hidden">{t().rank}</span>#</th>
-			<th scope="col" class="name">{t().playerCol}</th>
-			<th scope="col" class="num" title={tc().roundsWon}>{t().won}</th>
-			<th scope="col" class="num dist">{t().total}</th>
-		</tr>
-	</thead>
-	<tbody>
-		{#each rows as row (row.playerId)}
-			<tr
-				class={{ me: row.playerId === meId, winner: winnerIds.includes(row.playerId), offline: !row.connected }}
-				style:--c={row.color}
-				data-testid={row.playerId === meId ? 'my-row' : undefined}
-			>
-				<td class="rank">{row.rank}</td>
-				<th scope="row" class="name">
-					<span class="who">
-						<span class="dot" aria-hidden="true"></span>
-						<span class="nick">{row.nickname}</span>
-						{#if row.playerId === meId}<span class="you">{t().you}</span>{/if}
-					</span>
-				</th>
-				<td class="num won">{row.roundsWon}</td>
-				<td class="num dist">{row.guessedRounds > 0 ? t().distance(row.totalDistanceKm) : '–'}</td>
+{#if teams}
+	<table class="standings teams" data-testid="team-standings">
+		<caption>{caption}</caption>
+		<thead>
+			<tr>
+				<th scope="col" class="rank"><span class="visually-hidden">{t().rank}</span>#</th>
+				<th scope="col" class="name">{tc().team}</th>
+				<th scope="col" class="num" title={tc().roundsWon}>{t().won}</th>
+				<th scope="col" class="num dist">{t().total}</th>
 			</tr>
+		</thead>
+		{#each teams as team (team.team)}
+			<tbody
+				class={{ 'my-team': team.team === myTeam, 'team-winner': winnerTeams.includes(team.team) }}
+				data-testid="team-row"
+				data-team={team.team}
+			>
+				<tr class="team-head">
+					<td class="rank">{team.rank}</td>
+					<th scope="rowgroup" class="name"><span class="nick">{teamName(team.team, team.name, locale())}</span></th>
+					<td class="num won">{team.roundsWon}</td>
+					<td class="num dist"></td>
+				</tr>
+				{#each team.members as row (row.playerId)}
+					<tr
+						class={['member', { me: row.playerId === meId, offline: !row.connected }]}
+						style:--c={row.color}
+						data-testid={row.playerId === meId ? 'my-row' : 'team-member'}
+					>
+						<td class="rank"></td>
+						<th scope="row" class="name">
+							<span class="who">
+								<span class="dot" aria-hidden="true"></span>
+								<span class="nick">{row.nickname}</span>
+								{#if row.playerId === meId}<span class="you">{t().you}</span>{/if}
+							</span>
+						</th>
+						<td class="num"></td>
+						<td class="num dist">{row.guessedRounds > 0 ? t().distance(row.totalDistanceKm) : '–'}</td>
+					</tr>
+				{/each}
+			</tbody>
 		{/each}
-	</tbody>
-</table>
+	</table>
+{:else}
+	<table class="standings" data-testid="standings">
+		<caption>{caption}</caption>
+		<thead>
+			<tr>
+				<th scope="col" class="rank"><span class="visually-hidden">{t().rank}</span>#</th>
+				<th scope="col" class="name">{t().playerCol}</th>
+				<th scope="col" class="num" title={tc().roundsWon}>{t().won}</th>
+				<th scope="col" class="num dist">{t().total}</th>
+			</tr>
+		</thead>
+		<tbody>
+			{#each rows as row (row.playerId)}
+				<tr
+					class={{ me: row.playerId === meId, winner: winnerIds.includes(row.playerId), offline: !row.connected }}
+					style:--c={row.color}
+					data-testid={row.playerId === meId ? 'my-row' : undefined}
+				>
+					<td class="rank">{row.rank}</td>
+					<th scope="row" class="name">
+						<span class="who">
+							<span class="dot" aria-hidden="true"></span>
+							<span class="nick">{row.nickname}</span>
+							{#if row.playerId === meId}<span class="you">{t().you}</span>{/if}
+						</span>
+					</th>
+					<td class="num won">{row.roundsWon}</td>
+					<td class="num dist">{row.guessedRounds > 0 ? t().distance(row.totalDistanceKm) : '–'}</td>
+				</tr>
+			{/each}
+		</tbody>
+	</table>
+{/if}
 
 <style>
 	.standings {
@@ -155,8 +215,27 @@
 		color: var(--color-accent-contrast);
 		background: var(--color-accent);
 	}
-	tr.offline .nick {
+	tr.offline .nick,
+	tr.offline .dot {
 		opacity: 0.55;
+	}
+	.teams tbody tr.member > * {
+		padding-block: var(--space-1);
+	}
+	.teams tbody:not(:first-of-type) tr.team-head > * {
+		border-top: var(--space-2) solid transparent;
+		background-clip: padding-box;
+	}
+	.team-head .nick {
+		font-weight: var(--weight-bold);
+		font-size: var(--text-md);
+	}
+	tbody.my-team tr.team-head > * {
+		background: color-mix(in oklab, var(--color-primary) 16%, var(--color-surface));
+	}
+	tbody.team-winner tr.team-head .rank {
+		color: var(--color-accent-contrast);
+		background: var(--color-accent);
 	}
 	@media (max-width: 22.5rem) {
 		.num {

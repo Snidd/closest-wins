@@ -1,8 +1,9 @@
 <!-- Lobby: pair the TV first, then the join code (QR on demand) and the live player list. -->
 <script lang="ts">
 	import QrCode from '#lib/ui/QrCode.svelte';
-	import { useT } from '#lib/i18n/context.ts';
+	import { useLocale, useT } from '#lib/i18n/context.ts';
 	import { host } from '#lib/i18n/host.ts';
+	import { teamName } from '#lib/game/teams.ts';
 	import PairTv from './PairTv.svelte';
 	import PlayerList from './PlayerList.svelte';
 	import TvStatus from './TvStatus.svelte';
@@ -17,6 +18,7 @@
 	let { snap, tvUrl, kicking, onkick }: Props = $props();
 
 	const t = useT(host);
+	const locale = useLocale();
 	let repair = $state(false);
 	let showQr = $state(false);
 
@@ -60,7 +62,23 @@
 		{t().playersTitle}
 		<span class="count" data-testid="player-count">{snap.players.length}</span>
 	</h2>
-	{#if snap.players.length === 0}
+	{#if snap.game.teams}
+		<!-- Every team, empty ones included, with its players. -->
+		{#each snap.game.teams as team (team.index)}
+			{@const members = snap.players.filter((p) => p.team === team.index)}
+			<div class="team" data-testid="lobby-team" data-team={team.index}>
+				<h3 class="team-title">
+					{teamName(team.index, team.name, locale())}
+					<span class="team-count">{members.length}</span>
+				</h3>
+				{#if members.length}
+					<PlayerList players={members} {kicking} {onkick} />
+				{:else}
+					<p class="team-empty">{t().noPlayersInTeam}</p>
+				{/if}
+			</div>
+		{/each}
+	{:else if snap.players.length === 0}
 		<p class="waiting">
 			<span class="pulse" aria-hidden="true"></span>
 			{t().noPlayersYet}
@@ -145,6 +163,33 @@
 		padding: var(--space-2);
 		border-radius: var(--radius-md);
 		background: #fff;
+	}
+	.team {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-1);
+		padding-top: var(--space-2);
+		border-top: 2px solid var(--color-border);
+	}
+	.team:first-of-type {
+		border-top: 0;
+		padding-top: 0;
+	}
+	.team-title {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		font-size: var(--text-md);
+	}
+	.team-count {
+		font-size: var(--text-sm);
+		font-weight: var(--weight-medium);
+		color: var(--color-text-muted);
+	}
+	.team-empty {
+		min-height: 2.5rem;
+		font-size: var(--text-sm);
+		color: var(--color-text-muted);
 	}
 	.waiting {
 		display: flex;

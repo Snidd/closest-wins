@@ -178,7 +178,22 @@ export const host = defineDict({
 		errPlaylistNotFound: 'Playlist not found',
 		errPlaylistEmpty: 'The playlist has no locations',
 		errNoScreenWithCode: 'No screen is showing that code right now',
-		errGameFinished: 'The game has already finished'
+		errGameFinished: 'The game has already finished',
+		// --- Teams ------------------------------------------------------------------------------
+		teams: 'Teams',
+		teamsOn: 'Play in teams',
+		teamsHint: 'Everyone still guesses alone. The closest player’s team gets the point.',
+		teamCount: 'Number of teams',
+		teamCountRange: (min: number, max: number) => `Between ${min} and ${max}`,
+		teamNameLabel: (n: number) => `Name of team ${n}`,
+		teamNameTooLong: (max: number) => `At most ${max} characters`,
+		teamNameInvalid: 'That name has characters we can’t show',
+		teamPick: 'Players pick their team',
+		teamPickHint: 'Otherwise each player joins the smallest team.',
+		errTeamCount: (min: number, max: number) => `Choose between ${min} and ${max} teams`,
+		noPlayersInTeam: 'No players yet',
+		suddenDeathTeamsExplain: (names: string) =>
+			`${names} are tied for the lead. Their players play one more round; everyone else watches.`,
 	},
 	sv: {
 		hostTag: 'Spelledare',
@@ -347,6 +362,20 @@ export const host = defineDict({
 		errPlaylistNotFound: 'Spellistan finns inte',
 		errPlaylistEmpty: 'Spellistan har inga platser',
 		errNoScreenWithCode: 'Ingen skärm visar den koden just nu',
-		errGameFinished: 'Spelet är redan slut'
+		errGameFinished: 'Spelet är redan slut',
+		teams: 'Lag',
+		teamsOn: 'Spela i lag',
+		teamsHint: 'Alla gissar fortfarande själva. Laget med den spelare som kommer närmast får poängen.',
+		teamCount: 'Antal lag',
+		teamCountRange: (min, max) => `Mellan ${min} och ${max}`,
+		teamNameLabel: (n) => `Namn på lag ${n}`,
+		teamNameTooLong: (max) => `Högst ${max} tecken`,
+		teamNameInvalid: 'Namnet har tecken vi inte kan visa',
+		teamPick: 'Spelarna väljer lag',
+		teamPickHint: 'Annars hamnar varje spelare i det minsta laget.',
+		errTeamCount: (min, max) => `Välj mellan ${min} och ${max} lag`,
+		noPlayersInTeam: 'Inga spelare än',
+		suddenDeathTeamsExplain: (names) =>
+			`${names} delar ledningen. Deras spelare spelar en runda till; alla andra tittar på.`,
 	}
 });

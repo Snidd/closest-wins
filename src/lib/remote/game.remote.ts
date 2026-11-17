@@ -30,6 +30,8 @@ import {
 	ListGamesSchema,
 	LockInSchema,
 	MAX_PLAYERS,
+	MAX_TEAMS,
+	MIN_TEAMS,
 	NextRoundSchema,
 	PairTvSchema,
 	PlayerStateArgSchema,
@@ -119,7 +121,8 @@ export const tvState = query.live((): AsyncGenerator<TvStateValue> => {
 /**
  * Join with a nickname. On success sets the player cookie and redirects (303) to
  * `/play/{code}`. Nickname taken / game full → `invalid(issue.nickname(...))`; unknown code →
- * `invalid(issue.code(...))`; removed by the host → form-level `invalid(...)`.
+ * `invalid(issue.code(...))`; no valid team where players pick → `invalid(issue.team(...))`;
+ * removed by the host → form-level `invalid(...)`.
  */
 export const joinGame = form(JoinGameSchema, async (data, issue) => {
 	const event = getRequestEvent();
@@ -146,6 +149,8 @@ export const joinGame = form(JoinGameSchema, async (data, issue) => {
 					invalid(t.kickedFromGame);
 				case 'NOT_FOUND':
 					invalid(issue.code(t.gameNotFoundTitle));
+				case 'TEAM_REQUIRED':
+					invalid(issue.team(t.teamRequired));
 			}
 			error(gameErrorStatus(e.code), e.message);
 		}
@@ -196,6 +201,7 @@ export const registerTv = command(async (): Promise<RegisterTvResult> => {
 export const createGame = form(CreateGameSchema, async (data, issue) => {
 	requireAdmin();
 	const t = translate(host, getRequestEvent().locals.locale);
+	if (data.teams && data.teamCount === undefined) invalid(issue.teamCount(t.errTeamCount(MIN_TEAMS, MAX_TEAMS)));
 	let created: Awaited<ReturnType<typeof engine.createGame>>;
 	try {
 		created = await engine.createGame(data);
