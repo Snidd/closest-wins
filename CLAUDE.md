@@ -91,6 +91,7 @@ src/app.css                   design tokens (colours, spacing, type, player colo
 src/lib/game/types.ts         SHARED CONTRACT: phases, Player/Host/Tv snapshots, command valibot schemas
 src/lib/game/clock.ts         clockOffset / remainingMs for countdowns
 src/lib/game/reveal.ts        revealSchedule: when each guess appears in a reveal, and the answer after
+src/lib/game/teams.ts         team display names (custom name or "Team N" / "Lag N"), every surface
 src/lib/geo.ts                haversineKm, normalizeLng (client + server)
 src/lib/i18n/                 defineDict, useT, localized(); one dictionary per surface:
                               common.ts (shared) · player.ts · host.ts · tv.ts · admin.ts
