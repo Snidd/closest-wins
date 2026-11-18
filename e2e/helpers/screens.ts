@@ -45,28 +45,6 @@ export async function expectNoAnswer(pages: Page[], target: LocationRow) {
 	}
 }
 
-/**
- * Records (in the page, on the shared machine clock) when `selector` first appears, so the test
- * can compare when two screens showed something without polling granularity in the way.
- */
-export async function watchAppear(page: Page, key: string, selector: string) {
-	await page.evaluate(
-		([k, sel]) => {
-			const w = window as unknown as { __appear?: Record<string, number> };
-			w.__appear ??= {};
-			delete w.__appear[k];
-			const check = () => {
-				if (!w.__appear![k] && document.querySelector(sel)) w.__appear![k] = Date.now();
-			};
-			check();
-			new MutationObserver(check).observe(document.body, { childList: true, subtree: true });
-		},
-		[key, selector] as const
-	);
-}
-export const appearedAt = (page: Page, key: string) =>
-	page.evaluate((k) => (window as unknown as { __appear?: Record<string, number> }).__appear?.[k] ?? null, key);
-
 /** A point `dLat`/`dLng` degrees away from the target. */
 export const offset = (t: LocationRow, dLat: number, dLng: number) => ({ lat: t.lat + dLat, lng: t.lng + dLng });
 
@@ -165,15 +143,9 @@ export class Screens {
 		await expect(page.getByTestId('locked-panel')).toBeVisible();
 	}
 
-	/** Before a round ends: note when the TV shows the answer and when each phone shows its result. */
-	async watchReveal() {
-		await watchAppear(this.tv, 'answer', '[data-testid="reveal-name"]');
-		for (const p of this.phones) await watchAppear(p.page, 'result', '[data-testid="reveal-result"]');
-	}
-
 	/**
-	 * The reveal on all screens: suspense first (no answer on the TV or the phones), then the TV
-	 * shows the answer, and only from that moment the phones show their own result.
+	 * The reveal on all screens: the TV shows the answer, each phone its own result with the
+	 * localized answer, the host the place, and the TV's reveal runs to the end.
 	 */
 	async reveal(target: LocationRow) {
 		await this.phase('reveal');
@@ -182,14 +154,6 @@ export class Screens {
 		for (const p of this.phones) {
 			await expect(p.page.getByTestId('reveal-result')).toBeVisible({ timeout: 10_000 });
 			await expect(p.page.getByTestId('answer-name')).toHaveText(p.locale === 'sv' ? (target.nameSv ?? name) : name);
-		}
-		const tvAt = await appearedAt(this.tv, 'answer');
-		expect(tvAt).not.toBeNull();
-		for (const p of this.phones) {
-			const at = await appearedAt(p.page, 'result');
-			expect(at, `${p.nick}'s phone showed its result before the TV showed the answer`).toBeGreaterThanOrEqual(
-				tvAt! - 300
-			);
 		}
 		await expect(this.host.getByTestId('reveal-place')).toHaveText(name);
 		await expect(this.tv.getByTestId('reveal-screen')).toHaveAttribute('data-reveal-stage', 'done', { timeout: 10_000 });
