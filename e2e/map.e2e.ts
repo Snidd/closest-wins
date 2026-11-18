@@ -219,6 +219,26 @@ test('RevealMap runs the stages and skip jumps to the end', async ({ page }) => 
 	await expect(page.getByTestId('stage')).toHaveText('done', { timeout: 1000 });
 });
 
+test('RevealMap zooms in past the usual cap when several guesses are very close', async ({ page }) => {
+	await page.goto('/dev/map?view=reveal&n=12&theme=light&cluster=1');
+	// With n=12 and the default seed, p0 and p1 do not guess; p2, p3 and p4 are 3, 5 and 8 km out.
+	const dot = (playerId: string) => page.locator(`.reveal-map .pin:has([data-label-for="${playerId}"]) .dot`);
+	const apart = async () => {
+		const [a, b] = await Promise.all([dot('p2').boundingBox(), dot('p3').boundingBox()]);
+		if (!a || !b) return 0;
+		return Math.hypot(a.x + a.width / 2 - (b.x + b.width / 2), a.y + a.height / 2 - (b.y + b.height / 2));
+	};
+	await expect(page.getByTestId('stage')).toHaveText('done', { timeout: 30_000 });
+	// About 7 km apart: ~11 px at the usual zoom cap of 7, ~90 px at MAX_ZOOM.
+	await expect.poll(apart).toBeGreaterThan(60);
+
+	await page.getByTestId('replay').tap();
+	await expect(page.getByTestId('stage')).toHaveText('pins');
+	await page.getByTestId('skip').tap();
+	await expect(page.getByTestId('stage')).toHaveText('done', { timeout: 1000 });
+	await expect.poll(apart).toBeGreaterThan(60);
+});
+
 test('a missing tile file shows an error instead of a blank map', async ({ page }) => {
 	await page.route('**/map/world.pmtiles', (route) => route.fulfill({ status: 404, body: 'Not found' }));
 	await page.goto('/dev/map?view=guess');

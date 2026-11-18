@@ -2,6 +2,7 @@
   Map playground (dev aid, no auth): exercise GuessMap, RevealMap (3 / 12 / 40 fake players,
   replay, skip, final mode) and StaticPointMap. URL params: ?view=guess|reveal|static,
   &n=3|12|40, &target=stockholm|fiji|machuPicchu|uluru, &theme=light|dark, &final=1,
+  &cluster=1 (three guesses within 10 km of the target, the rest far away),
   guess view: &lat=..&lng=..&z=.. (initial centre / zoom).
 -->
 <script lang="ts">
@@ -47,12 +48,13 @@
 	let n = $state(Number(params.get('n')) || 12);
 	let target = $state<TargetKey>((Object.keys(TARGETS) as TargetKey[]).find((k) => k === params.get('target')) ?? 'stockholm');
 	let final = $state(params.get('final') === '1');
+	let cluster = $state(params.get('cluster') === '1');
 	let seed = $state(7);
 	let startedAt = $state(Date.now());
 	let skipped = $state(false);
 	let stage = $state<RevealStage | null>(null);
 	const players = $derived(fakePlayers(n));
-	const result = $derived(fakeResult(players, target, startedAt, { seed, skipped }));
+	const result = $derived(fakeResult(players, target, startedAt, { seed, skipped, cluster }));
 
 	function replay() {
 		skipped = false;
@@ -152,6 +154,7 @@
 				<button type="button" data-testid="skip" onclick={() => (skipped = true)}>Skip</button>
 				<button type="button" onclick={() => ((seed = seed + 1), replay())}>Reroll</button>
 				<label><input type="checkbox" bind:checked={final} /> final</label>
+				<label><input type="checkbox" bind:checked={cluster} onchange={replay} /> cluster</label>
 				<span>stage <b data-testid="stage">{stage ?? '-'}</b></span>
 			</div>
 			{#if stage === 'done'}
