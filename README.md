@@ -241,11 +241,36 @@ docker compose -f compose.azure.yaml --env-file .env.azure up -d --build
   (`SSH_SOURCE=<address> scripts/azure/create-vm.sh` again when yours changes).
 - The login is open to the internet: use a long `ADMIN_PASSWORD`.
 - The Apple TV app cannot discover a server on the internet: type `https://<DOMAIN>` into it once.
-- Update with `git pull`, then the same `docker compose ... up -d --build`.
 - The database and the photos are Docker volumes on the VM's disk: back up the VM (Azure Backup
   or disk snapshots). `az group delete --name closest-wins` removes everything.
 
 It is not tied to Azure: the compose file works on any Linux VM with Docker and ports 80/443.
+
+#### Deploying a new version
+
+Push to GitHub, then on the VM:
+
+```sh
+ssh azureuser@<address>
+cd closest-wins
+git pull
+docker compose -f compose.azure.yaml --env-file .env.azure up -d --build
+```
+
+- Only the app container is rebuilt and restarted (a few seconds of downtime); Postgres, Caddy
+  and the volumes stay. Phones, host and TV reconnect by themselves.
+- **Database changes** need no extra step: commit the migration that `pnpm db:generate` writes
+  to `drizzle/` together with the code, and the app applies it on start. Never run
+  `pnpm db:push` against this database.
+- If a migration fails, the app does not start and keeps restarting: read
+  `docker compose -f compose.azure.yaml --env-file .env.azure logs app`.
+- Migrations are not undone by going back to older code. Before one that drops or rewrites
+  data, take a dump first:
+
+  ```sh
+  docker compose -f compose.azure.yaml --env-file .env.azure exec db \
+    pg_dump -U closestwins closestwins > backup-$(date +%F).sql
+  ```
 
 ### Behind a reverse proxy
 
