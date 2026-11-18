@@ -97,7 +97,6 @@ test('a whole game on five real screens: three rounds, a tie, sudden death and o
 		await s.lockIn('Björn');
 		await s.locked(['Anna', 'Björn'], ['Anna', 'Björn', 'Cleo']);
 		await expectNoAnswer([tv, ...phones.map((p) => p.page)], r.target);
-		await s.watchReveal();
 		await s.lockIn('Cleo'); // the last one: the round ends by itself
 		await s.reveal(r.target);
 		await s.results(gameId, ['Anna'], []);
@@ -122,7 +121,6 @@ test('a whole game on five real screens: three rounds, a tie, sudden death and o
 		await s.locked(['Anna'], ['Anna', 'Björn', 'Cleo']);
 		// Cleo is warned near the end that an untouched map does not count.
 		await expect(s.phone('Cleo').page.getByTestId('untouched-hint')).toBeVisible({ timeout: TIMER * 1000 });
-		await s.watchReveal();
 		await expect(s.phone('Cleo').page.getByTestId('timeup-panel')).toBeVisible({ timeout: TIMER * 1000 });
 		await s.reveal(r.target);
 		await s.results(gameId, ['Björn'], ['Cleo']);
@@ -138,7 +136,6 @@ test('a whole game on five real screens: three rounds, a tie, sudden death and o
 		await s.roundLabel(3);
 		r = await roundState(gameId);
 		await expectNoAnswer([tv, ...phones.map((p) => p.page)], r.target);
-		await s.watchReveal();
 		await host.getByTestId('end-round').click({ delay: 1300 });
 		await s.reveal(r.target);
 		await s.results(gameId, [], ['Anna', 'Björn', 'Cleo']);
@@ -185,7 +182,6 @@ test('a whole game on five real screens: three rounds, a tie, sudden death and o
 		]);
 		await s.lockIn('Björn');
 		await s.locked(['Björn'], ['Anna', 'Björn']);
-		await s.watchReveal();
 		await s.lockIn('Anna'); // both duellists locked: the round ends without waiting for Cleo
 		await s.reveal(r.target);
 		await s.results(gameId, ['Anna'], []);
@@ -271,7 +267,6 @@ test('mid-game: a reload, a kick, a late joiner and a server restart during a ro
 		await expectNoAnswer(pages(), r.target);
 
 		// --- The host removes Cleo: her phone says so, the round ends (everyone left locked in) --
-		await s.watchReveal();
 		await host.getByTestId('menu-button').click();
 		await host.getByRole('button', { name: 'Remove Cleo' }).click();
 		await host.getByRole('button', { name: 'Yes, remove' }).click();
@@ -330,7 +325,6 @@ test('mid-game: a reload, a kick, a late joiner and a server restart during a ro
 
 		await steerTo(ben.page, gameId, r.index, offset(r.target, -6, 0));
 		await steerTo(danaPage, gameId, r.index, offset(r.target, 0, -12));
-		await s.watchReveal();
 		await s.lockIn('Ben');
 		await s.lockIn('Dana');
 		// Everyone locked in: the round ends (after the restart's reconnect grace at the latest).
