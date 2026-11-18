@@ -1,6 +1,7 @@
 <!--
   Create / edit a location: bilingual texts side by side, coordinates (inputs, paste parser, map),
-  photo (separate upload/import forms; attached on Save) and delete.
+  the optional start view of the players' map (picked on a phone-shaped `GuessMap`, submitted
+  through hidden inputs), photo (separate upload/import forms; attached on Save) and delete.
 -->
 <script lang="ts">
 	import * as v from 'valibot';
@@ -9,6 +10,7 @@
 	import { createLocation, deleteLocation, updateLocation } from '#lib/remote/content.remote.ts';
 	import { TEXT_MAX } from '#lib/content/schemas.ts';
 	import { MAX_LOCATION_LAT } from '#lib/geo.ts';
+	import GuessMap from '#lib/map/GuessMap.svelte';
 	import type { LocationWithPhoto } from '#lib/server/content/locations.ts';
 	import type { Photo } from '#lib/server/db/schema.ts';
 	import { useLocale, useT } from '#lib/i18n/context.ts';
@@ -47,6 +49,9 @@
 		factEn: string;
 		lat?: number;
 		lng?: number;
+		startLat?: number;
+		startLng?: number;
+		startZoom?: number;
 	};
 	const toValues = (l: LocationWithPhoto | null): Values => ({
 		nameSv: l?.nameSv ?? '',
@@ -55,7 +60,10 @@
 		clueTextEn: l?.clueTextEn ?? '',
 		factSv: l?.factSv ?? '',
 		factEn: l?.factEn ?? '',
-		...(l ? { lat: l.lat, lng: l.lng } : {})
+		...(l ? { lat: l.lat, lng: l.lng } : {}),
+		...(l && l.startLat !== null && l.startLng !== null && l.startZoom !== null
+			? { startLat: l.startLat, startLng: l.startLng, startZoom: l.startZoom }
+			: {})
 	});
 
 	let saved = $state<Values>(toValues(initial));
@@ -119,7 +127,10 @@
 			x.factSv ?? '',
 			x.factEn ?? '',
 			x.lat ?? null,
-			x.lng ?? null
+			x.lng ?? null,
+			x.startLat ?? null,
+			x.startLng ?? null,
+			x.startZoom ?? null
 		]);
 	const dirty = $derived(norm(values) !== norm(saved) || (photo?.id ?? null) !== savedPhotoId);
 
@@ -182,6 +193,31 @@
 	$effect(() => {
 		if (parsed) setPoint(parsed.lat, parsed.lng);
 	});
+
+	// --- Start view ------------------------------------------------------------------------------
+	type StartView = { lat: number; lng: number; zoom: number };
+	const startOf = (x: Partial<Values>): StartView | null =>
+		x.startLat !== undefined && x.startLng !== undefined && x.startZoom !== undefined
+			? { lat: x.startLat, lng: x.startLng, zoom: x.startZoom }
+			: null;
+	const startView = $derived(startOf(values));
+	/** A stored start view was removed: the update form must say so (an omitted field is kept). */
+	const clearingStartView = $derived(!startView && !!startOf(saved));
+	// Only the update form has `clearStartView` (create has nothing to clear).
+	const updateFields = form.fields as unknown as ReturnType<typeof updateLocation.for>['fields'];
+	// svelte-ignore state_referenced_locally
+	const pickerStart = startOf(saved);
+	let picker = $state<GuessMap>();
+	function useStartView() {
+		if (!picker) return;
+		const g = picker.getGuess();
+		form.fields.startLat.set(Math.round(g.lat * 1e6) / 1e6);
+		form.fields.startLng.set(Math.round(g.lng * 1e6) / 1e6);
+		form.fields.startZoom.set(Math.round(g.zoom * 100) / 100);
+	}
+	function removeStartView() {
+		form.fields.set({ ...values, startLat: undefined, startLng: undefined, startZoom: undefined } as Values);
+	}
 
 	// --- Photo -----------------------------------------------------------------------------------
 	function onPhotoChange(p: Photo | null) {
@@ -320,6 +356,39 @@
 			<input {...form.fields.photoId.as('hidden', photo?.id ?? '')} />
 		</section>
 
+		<section class="card start" aria-labelledby="start-view-title" data-testid="start-view">
+			<h2 id="start-view-title">{t().startView}</h2>
+			<p class="hint">{t().startViewHint}</p>
+			<div class="start-body">
+				<div class="phone" aria-label={t().startViewPicker} role="group">
+					<GuessMap
+						bind:this={picker}
+						initialCenter={pickerStart && { lat: pickerStart.lat, lng: pickerStart.lng }}
+						initialZoom={pickerStart?.zoom}
+					/>
+				</div>
+				<div class="start-side">
+					<p class="start-status" data-testid="start-view-status" data-set={!!startView}>
+						{startView
+							? t().startViewSet(fmtCoord(startView.lat), fmtCoord(startView.lng), String(startView.zoom))
+							: t().startViewNotSet}
+					</p>
+					<p class="hint">{t().startViewPickHint}</p>
+					<Button variant="secondary" onclick={useStartView}>{t().useStartView}</Button>
+					{#if startView}
+						<Button variant="ghost" class="danger-link" onclick={removeStartView}>{t().removeStartView}</Button>
+					{/if}
+				</div>
+			</div>
+			{#if startView}
+				<input {...form.fields.startLat.as('hidden', startView.lat)} />
+				<input {...form.fields.startLng.as('hidden', startView.lng)} />
+				<input {...form.fields.startZoom.as('hidden', startView.zoom)} />
+			{:else if clearingStartView}
+				<input {...updateFields.clearStartView.as('hidden', true)} />
+			{/if}
+		</section>
+
 		<footer class="savebar">
 			<div class="status" aria-live="polite">
 				{#each rootIssues as issue (issue.message)}<p class="issue">{issue.message}</p>{/each}
@@ -362,6 +431,7 @@
 		grid-template-areas:
 			'texts place'
 			'texts photo'
+			'start photo'
 			'save save';
 		align-items: start;
 		gap: var(--space-4);
@@ -389,6 +459,36 @@
 	}
 	.place {
 		grid-area: place;
+	}
+	.start {
+		grid-area: start;
+	}
+	.start-body {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: flex-start;
+		gap: var(--space-4);
+	}
+	/* Portrait and phone-shaped, so the view matches what a phone shows. */
+	.phone {
+		position: relative;
+		flex: none;
+		width: min(100%, 15rem);
+		aspect-ratio: 9 / 17;
+		border: 6px solid var(--color-text);
+		border-radius: 1.75rem;
+		overflow: hidden;
+		background: var(--color-ocean);
+	}
+	.start-side {
+		flex: 1 1 12rem;
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: var(--space-2);
+	}
+	.start-status {
+		font-weight: var(--weight-bold);
 	}
 	h2 {
 		font-size: var(--text-lg);
@@ -485,7 +585,7 @@
 	@media (max-width: 60rem) {
 		.editor {
 			grid-template-columns: minmax(0, 1fr);
-			grid-template-areas: 'texts' 'place' 'photo' 'save';
+			grid-template-areas: 'texts' 'place' 'start' 'photo' 'save';
 		}
 	}
 	@media (max-width: 36rem) {

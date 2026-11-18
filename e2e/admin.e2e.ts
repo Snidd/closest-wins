@@ -9,6 +9,7 @@ import { randomUUID } from 'node:crypto';
 import postgres from 'postgres';
 import sharp from 'sharp';
 import { expect, test, type Page } from '@playwright/test';
+import { WEBGL_LAUNCH } from './helpers/env.ts';
 
 const TAG = `E2E-${randomUUID().slice(0, 8)}`;
 const UUID = '[0-9a-f-]{36}';
@@ -47,7 +48,8 @@ async function login(page: Page) {
 	await expect(page).toHaveURL(/\/admin$/);
 }
 
-test.use({ locale: 'en-US' });
+// Headless WebGL via SwiftShader: the start view picker is a real (MapLibre) guess map.
+test.use({ locale: 'en-US', launchOptions: WEBGL_LAUNCH });
 
 test('admin manages a location and a playlist end to end', async ({ page }) => {
 	test.setTimeout(90_000);
@@ -212,4 +214,77 @@ test('admin pages render in Swedish and the editor refuses invalid input', async
 	await page.goto('/admin/locations/00000000-0000-4000-8000-000000000000');
 	await expect(page.getByText('Platsen finns inte')).toBeVisible();
 	await ctx.close();
+});
+
+test('the editor sets, saves and removes a location’s start view', async ({ page, browser }) => {
+	const sql = postgres(process.env.DATABASE_URL!, { max: 1, onnotice: () => {} });
+	const startOf = async (id: string) => {
+		const [row] = await sql<{ start_lat: number | null; start_lng: number | null; start_zoom: number | null }[]>`
+			select start_lat, start_lng, start_zoom from location where id = ${id}`;
+		return row!;
+	};
+	try {
+		const [loc] = await sql<{ id: string }[]>`
+			insert into location (name_en, name_sv, clue_text_en, lat, lng)
+			values (${`${TAG} Start`}, ${`${TAG} Start`}, 'A clue', 46.3625, 14.0936) returning id`;
+		const id = loc!.id;
+
+		await login(page);
+		await page.goto(`/admin/locations/${id}`);
+		const section = page.getByTestId('start-view');
+		const status = section.getByTestId('start-view-status');
+		await expect(section.getByRole('heading', { name: 'Start map view' })).toBeVisible();
+		await expect(status).toHaveText('Not set: players start from the whole world.');
+		await expect(section.getByRole('button', { name: 'Remove start view' })).toHaveCount(0);
+
+		// Pan and zoom the phone-shaped picker, then take its view.
+		const map = section.locator('.guess-map');
+		await expect(map).toHaveAttribute('data-status', 'ready', { timeout: 30_000 });
+		const box = (await map.boundingBox())!;
+		const cx = box.x + box.width / 2;
+		const cy = box.y + box.height / 2;
+		await page.mouse.move(cx, cy);
+		await page.mouse.down();
+		await page.mouse.move(cx - 40, cy + 20, { steps: 8 });
+		await page.mouse.up();
+		await page.mouse.dblclick(cx, cy);
+		await page.waitForTimeout(800); // the double-click zoom animates
+		await section.getByRole('button', { name: 'Use this view' }).click();
+		await expect(status).toHaveText(/^Centre -?\d+(\.\d+)?, -?\d+(\.\d+)? · zoom \d+(\.\d+)?$/);
+		await expect(page.getByText('Unsaved changes')).toBeVisible();
+		const shown = await status.textContent();
+
+		await page.getByRole('button', { name: 'Save location' }).click();
+		await expect(page.getByText('✓ Saved')).toBeVisible();
+		const stored = await startOf(id);
+		expect(stored.start_lat).not.toBeNull();
+		expect(stored.start_zoom!).toBeGreaterThan(1);
+
+		await page.reload();
+		await expect(status).toHaveText(shown!);
+		await expect(page.getByText('Unsaved changes')).toHaveCount(0);
+
+		await section.getByRole('button', { name: 'Remove start view' }).click();
+		await expect(status).toHaveText('Not set: players start from the whole world.');
+		await expect(page.getByText('Unsaved changes')).toBeVisible();
+		await page.getByRole('button', { name: 'Save location' }).click();
+		await expect(page.getByText('✓ Saved')).toBeVisible();
+		expect(await startOf(id)).toEqual({ start_lat: null, start_lng: null, start_zoom: null });
+		await page.reload();
+		await expect(status).toHaveText('Not set: players start from the whole world.');
+
+		// The same section in Swedish.
+		const ctx = await browser.newContext({ locale: 'sv-SE' });
+		const sv = await ctx.newPage();
+		await sv.goto(`/login?next=/admin/locations/${id}`);
+		await sv.getByLabel('Adminlösenord').fill(process.env.ADMIN_PASSWORD!);
+		await sv.getByLabel('Adminlösenord').press('Enter');
+		const svSection = sv.getByTestId('start-view');
+		await expect(svSection.getByRole('heading', { name: 'Startvy för kartan' })).toBeVisible();
+		await expect(svSection.getByTestId('start-view-status')).toHaveText('Inte satt: spelarna börjar med hela världen.');
+		await expect(svSection.getByRole('button', { name: 'Använd den här vyn' })).toBeVisible();
+		await ctx.close();
+	} finally {
+		await sql.end();
+	}
 });
