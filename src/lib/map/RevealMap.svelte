@@ -40,6 +40,7 @@
 	import MapChrome from './MapChrome.svelte';
 	import {
 		answerBounds,
+		answerMaxZoom,
 		guessesBounds,
 		guessPath,
 		revealTimingAt,
@@ -92,7 +93,6 @@
 	const theme = useMapTheme(() => themeProp);
 
 	const LINES_SOURCE = `${OVERLAY_PREFIX}reveal-lines`;
-	const ANSWER_MAX_ZOOM = 7;
 	const PINS_MAX_ZOOM = 4;
 
 	let container: HTMLDivElement;
@@ -266,7 +266,7 @@
 			guessesBounds(result.guesses),
 			PINS_MAX_ZOOM
 		);
-	const answerCamera = () => cameraFor(answerBounds(result.target, result.guesses), ANSWER_MAX_ZOOM);
+	const answerCamera = () => cameraFor(answerBounds(result.target, result.guesses), answerMaxZoom(result.guesses));
 
 	// ------------------------------------------------------------------------------------
 	// Lines

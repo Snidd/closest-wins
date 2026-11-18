@@ -106,6 +106,12 @@ describe('lngExtent / boundsOf', () => {
 		// Unchanged inside the map's latitude range.
 		expect(padBounds([[0, 10], [5, 60]], 20)).toEqual([[-7.5, 10], [12.5, 60]]);
 	});
+	it('keeps a small span in place when rounding leaves it a hair under the minimum', () => {
+		// 59.3435 ± 0.05 spans 0.0999999… in floating point.
+		const [[, s], [, n]] = padBounds([[18, 59.33], [18.2, 59.357]], 0.1);
+		expect(s).toBeCloseTo(59.2935, 9);
+		expect(n).toBeCloseTo(59.3935, 9);
+	});
 	it.each([
 		[89, 1.5],
 		[88, 20],

@@ -19,6 +19,13 @@ export const TARGETS = {
 } as const;
 export type TargetKey = keyof typeof TARGETS;
 
+/** The `cluster` scenario: the first three guesses (km from the target, bearing in radians). */
+const CLUSTER = [
+	{ dist: 3, bearing: 0.4 },
+	{ dist: 5, bearing: 2.6 },
+	{ dist: 8, bearing: 4.5 }
+];
+
 /** Deterministic PRNG so a replay shows the same guesses. */
 function rng(seed: number) {
 	let s = seed >>> 0;
@@ -45,7 +52,8 @@ export function fakeResult(
 	players: PlayerSummary[],
 	targetKey: TargetKey,
 	serverNow: number,
-	opts: { seed?: number; skipped?: boolean } = {}
+	/** `cluster`: three guesses within 10 km of the target, all others over 1000 km away. */
+	opts: { seed?: number; skipped?: boolean; cluster?: boolean } = {}
 ): RoundResult {
 	const target = TARGETS[targetKey];
 	const rand = rng(opts.seed ?? 7);
@@ -57,8 +65,13 @@ export function fakeResult(
 			continue;
 		}
 		// Log-normal-ish spread: a few close guesses, many within a continent, some wild.
-		const dist = Math.exp(rand() * 8.3) * 1.2; // 1 km … ~5000 km
-		const bearing = rand() * Math.PI * 2;
+		let dist = Math.exp(rand() * 8.3) * 1.2; // 1 km … ~5000 km
+		let bearing = rand() * Math.PI * 2;
+		if (opts.cluster) {
+			const fixed = CLUSTER[raw.length];
+			dist = fixed?.dist ?? 1500 + rand() * 3000;
+			bearing = fixed?.bearing ?? bearing;
+		}
 		const dLat = (dist / 111) * Math.cos(bearing);
 		const dLng = ((dist / 111) * Math.sin(bearing)) / Math.max(0.2, Math.cos((target.lat * Math.PI) / 180));
 		const lat = Math.max(-80, Math.min(80, target.lat + dLat));
