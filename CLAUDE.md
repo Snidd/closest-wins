@@ -125,6 +125,8 @@ tvos/                         Apple TV app (SwiftUI, tvOS 17+), the native twin 
 data/                         runtime data (gitignored): media/, map/world.pmtiles
 Dockerfile, compose.prod.yaml production image and stack (see README)
 compose.lan.yaml              the same image for a home server / Portainer: host network, map download
+compose.azure.yaml            the same image for a public VM: Caddy for HTTPS (deploy/azure/Caddyfile),
+                              created with scripts/azure/create-vm.sh
 ```
 
 ## Conventions

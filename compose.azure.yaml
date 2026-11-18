@@ -1,0 +1,104 @@
+# Public server in one step: the app, Postgres 18, the world map and Caddy for HTTPS, for a
+# single VM on the internet (written for Azure, works on any Linux VM with Docker).
+#
+#   scripts/azure/create-vm.sh          # once, from your own machine: the VM, its address, firewall
+#   cp .env.azure.example .env.azure    # on the VM: DOMAIN and the secrets
+#   docker compose -f compose.azure.yaml --env-file .env.azure up -d --build
+#
+# What differs from compose.lan.yaml:
+# - Caddy is the only thing published (ports 80 and 443). It gets and renews a Let's Encrypt
+#   certificate for DOMAIN by itself: the DNS name must point at this VM and both ports must be
+#   reachable from the internet before the first start.
+# - The app and Postgres are only reachable inside the compose network.
+# - No Bonjour: the Apple TV app cannot discover a server on the internet; type
+#   https://DOMAIN into it once.
+name: closest-wins-azure
+
+services:
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - '80:80'
+      - '443:443'
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN to the DNS name of this server, e.g. game.example.com}
+    volumes:
+      - ./deploy/azure/Caddyfile:/etc/caddy/Caddyfile:ro
+      # Certificates and the ACME account: keep this volume, or every recreate asks Let's
+      # Encrypt for a new certificate (rate limited).
+      - caddy_data:/data
+      - caddy_config:/config
+
+  app:
+    build:
+      context: .
+      target: app
+    image: closest-wins:latest
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      # Join links and the QR code are built from it, and form posts are only accepted from it.
+      ORIGIN: https://${DOMAIN:?set DOMAIN to the DNS name of this server, e.g. game.example.com}
+      DATABASE_URL: postgres://${POSTGRES_USER:-closestwins}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-closestwins}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD (long, the login is open to the internet)}
+      SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET (openssl rand -hex 32)}
+      MCP_TOKEN: ${MCP_TOKEN:?set MCP_TOKEN (openssl rand -hex 24)}
+      DATA_DIR: /data
+      # Photo uploads are up to 15 MB; adapter-node's default body limit is 512K.
+      BODY_SIZE_LIMIT: ${BODY_SIZE_LIMIT:-16M}
+      SHUTDOWN_TIMEOUT: ${SHUTDOWN_TIMEOUT:-10}
+      # Caddy is the one proxy in front; it replaces any X-Forwarded-For a client sends, so the
+      # login and join rate limits see real client addresses.
+      ADDRESS_HEADER: X-Forwarded-For
+      XFF_DEPTH: '1'
+      MDNS_ADVERTISE: '0'
+      SEED_SAMPLE_CONTENT: ${SEED_SAMPLE_CONTENT:-0}
+    # Migrations, then (if asked for) the sample content, which is safe to apply again.
+    command:
+      - sh
+      - -c
+      - node scripts/migrate.ts && { [ "$$SEED_SAMPLE_CONTENT" != 1 ] || node scripts/seed.ts; } && exec node build
+    volumes:
+      - data:/data
+    stop_grace_period: 15s
+
+  db:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-closestwins}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-closestwins}
+    volumes:
+      # Postgres 18 images keep their data in a versioned directory under /var/lib/postgresql.
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  # Runs once per start and exits: downloads the world map unless the volume already has it
+  # (scripts/fetch-map.sh; needs internet). MAP_FORCE=1 rebuilds it.
+  map:
+    build:
+      context: .
+      target: tools
+    image: closest-wins-tools:latest
+    restart: 'no'
+    environment:
+      DATA_DIR: /data
+      FORCE: ${MAP_FORCE:-0}
+    volumes:
+      - data:/data
+
+volumes:
+  pgdata:
+  data:
+  caddy_data:
+  caddy_config:

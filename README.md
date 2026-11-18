@@ -214,6 +214,39 @@ from `.env.lan.example` as environment variables.
   (e.g. Let's Encrypt through a DNS challenge); the Apple TV app gets the `https://` address
   over Bonjour, or you type it in once.
 
+### On a public server with HTTPS (Azure VM)
+
+`compose.azure.yaml` is the same image for one VM on the internet, so players do not have to be
+on your Wi-Fi: the app, Postgres, the one-off map download and [Caddy](https://caddyserver.com),
+which gets and renews a Let's Encrypt certificate by itself.
+
+```sh
+az login
+scripts/azure/create-vm.sh       # resource group, firewall, fixed address, Ubuntu VM with Docker
+```
+
+The script prints the VM's address, an Azure DNS name (`<label>.<region>.cloudapp.azure.com`) and
+the commands for the VM itself:
+
+```sh
+ssh azureuser@<address>
+cd closest-wins
+cp .env.azure.example .env.azure   # DOMAIN and the secrets
+docker compose -f compose.azure.yaml --env-file .env.azure up -d --build
+```
+
+- `DOMAIN` is the Azure DNS name, or your own name with an A record that points at the VM. It
+  must resolve before the first start, or Caddy cannot get the certificate.
+- Only ports 80 and 443 are open to everyone; SSH only from the address you ran the script from
+  (`SSH_SOURCE=<address> scripts/azure/create-vm.sh` again when yours changes).
+- The login is open to the internet: use a long `ADMIN_PASSWORD`.
+- The Apple TV app cannot discover a server on the internet: type `https://<DOMAIN>` into it once.
+- Update with `git pull`, then the same `docker compose ... up -d --build`.
+- The database and the photos are Docker volumes on the VM's disk: back up the VM (Azure Backup
+  or disk snapshots). `az group delete --name closest-wins` removes everything.
+
+It is not tied to Azure: the compose file works on any Linux VM with Docker and ports 80/443.
+
 ### Behind a reverse proxy
 
 - Set `ORIGIN` to the public `https://` URL (cookies are then `Secure`; join links and the QR use
