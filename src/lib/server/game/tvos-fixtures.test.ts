@@ -1,7 +1,7 @@
 /**
  * Sample TV snapshots for the native Apple TV app's decoding tests (`tvos/Fixtures/*.json`).
  *
- * Plays two small games through the real engine (dev database, fake clock, like
+ * Plays three small games through the real engine (dev database, fake clock, like
  * engine.test.ts) and records what `buildTvState` yields in every state, so the files are true
  * `TvStateValue` output. Volatile values (ids, join/pairing codes, photo keys, origin) are
  * replaced by fixed placeholders and the clock starts at a fixed time, so regenerating gives the
@@ -43,7 +43,7 @@ const REGENERATE_HINT = 'run pnpm tvos:fixtures (needs the dev database) and com
 /** Fixed start of the fake clock (2026-11-16 19:00 UTC). */
 const BASE_TIME = Date.UTC(2026, 10, 16, 19, 0, 0);
 const FIXTURE_ORIGIN = 'http://192.168.1.20:5173';
-const JOIN_CODES = ['KDRW', 'HMPT'];
+const JOIN_CODES = ['KDRW', 'HMPT', 'FXTM'];
 const PAIRING_CODES = ['482913', '730164', '215870', '906352'];
 
 interface Place {
@@ -163,22 +163,23 @@ afterAll(async () => {
 
 const expected = async (gameId: string) => expectedStateOf(await buildHostSnapshot(gameId));
 
-async function newGame(language: 'en' | 'sv', rounds: number) {
+async function newGame(language: 'en' | 'sv', rounds: number, teamNames?: string[]) {
 	const r = await createGame({
 		playlistId: fx.playlistId,
 		roundCount: rounds,
 		selection: 'first',
 		shuffle: false,
 		timerSeconds: 30,
-		language
+		language,
+		...(teamNames ? { teams: true, teamCount: teamNames.length, teamNames, teamPick: true } : {})
 	});
 	fx.gameIds.push(r.gameId);
 	return r;
 }
 
-async function join(code: string, nickname: string, connected = true) {
+async function join(code: string, nickname: string, connected = true, team?: number) {
 	fx.clock.now += 1000;
-	const r = await joinGame({ code, nickname }, null);
+	const r = await joinGame({ code, nickname, team }, null);
 	const p = (await resolvePlayer(r.gameId, r.token))!;
 	if (connected) presence.push(enterPresence(r.gameId, `player:${p.id}`));
 	return p;
@@ -320,6 +321,51 @@ async function record() {
 	if (!sdPlace) throw new Error('unknown sudden-death location');
 	await guess(asa, 2, sdPlace, 0.5, true);
 	await snap('round-sudden-death', tv2);
+
+	// Game 3 (English, 2 rounds, two teams, one with a custom name): the teams tie, sudden death
+	// between all their players, the Foxes take it.
+	const tv3 = await newTv();
+	const g3 = await newGame('en', 2, ['Foxes', '']);
+	gameIds.push(g3.gameId);
+	const eva = await join(g3.joinCode, 'Eva', true, 0);
+	const finn = await join(g3.joinCode, 'Finn', true, 1);
+	const gus = await join(g3.joinCode, 'Gus', true, 0);
+	const hana = await join(g3.joinCode, 'Hana', false, 1); // shown as disconnected
+	playerIds.push(eva.id, finn.id, gus.id, hana.id);
+	await pairTv(g3.gameId, await pairingCodeOf(tv3));
+	await snap('lobby-teams', tv3);
+	await startRound(g3.gameId, await expected(g3.gameId));
+	await fx.clock.advance(4000);
+	await guess(eva, 0, eiffel, 0.3, true);
+	await guess(finn, 0, eiffel, 1);
+	await snap('round-teams', tv3);
+	await guess(gus, 0, eiffel, 2);
+	await endRoundNow(g3.gameId, await expected(g3.gameId));
+	await fx.clock.advance(1000);
+	await snap('reveal-teams', tv3);
+	await nextRound(g3.gameId, await expected(g3.gameId));
+	await snap('standings-teams', tv3);
+	await nextRound(g3.gameId, await expected(g3.gameId));
+	await guess(eva, 1, uluru, 2);
+	await guess(finn, 1, uluru, 0.1);
+	await guess(gus, 1, uluru, 3);
+	await endRoundNow(g3.gameId, await expected(g3.gameId));
+	await nextRound(g3.gameId, await expected(g3.gameId));
+	await snap('standings-teams-sudden-death', tv3);
+	await nextRound(g3.gameId, await expected(g3.gameId));
+	await fx.clock.advance(6000);
+	const sd3 = await buildTvState(tv3);
+	if (sd3.status !== 'paired' || sd3.phase !== 'round') throw new Error('expected the teams sudden-death round');
+	const sd3Place = PLACES.find((p) => p.clueEn === sd3.round.clue.textEn);
+	if (!sd3Place) throw new Error('unknown teams sudden-death location');
+	await guess(gus, 2, sd3Place, 0.4, true);
+	await snap('round-teams-sudden-death', tv3);
+	await guess(finn, 2, sd3Place, 1.5, true);
+	await guess(eva, 2, sd3Place, 2, true);
+	await endRoundNow(g3.gameId, await expected(g3.gameId));
+	await nextRound(g3.gameId, await expected(g3.gameId));
+	await nextRound(g3.gameId, await expected(g3.gameId));
+	await snap('finished-teams', tv3);
 
 	return { shots, gameIds, playerIds, fileKeys };
 }

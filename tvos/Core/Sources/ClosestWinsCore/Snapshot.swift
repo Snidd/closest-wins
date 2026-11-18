@@ -60,6 +60,16 @@ public struct Player: Decodable, Sendable, Equatable, Identifiable {
 	public let color: String
 	public let connected: Bool
 	public let lateJoiner: Bool
+	/// 0-based team index; only in a teams game.
+	public let team: Int?
+}
+
+/// A team of a teams game. Show it with `Strings.teamName`.
+public struct TeamInfo: Decodable, Sendable, Equatable {
+	/// 0-based.
+	public let index: Int
+	/// The host's name for the team; nil means the default name ("Team 2").
+	public let name: String?
 }
 
 public struct GameInfo: Decodable, Sendable, Equatable {
@@ -72,6 +82,15 @@ public struct GameInfo: Decodable, Sendable, Equatable {
 	public let timerSeconds: Int
 	/// Planned regular rounds (sudden death not included).
 	public let totalRounds: Int
+	/// Every team, empty ones included; only in a teams game.
+	public let teams: [TeamInfo]?
+	/// Players chose their team when joining; only in a teams game.
+	public let teamPick: Bool?
+
+	/// The stored name of team `index` (nil: the default name).
+	public func teamName(_ index: Int) -> String? {
+		teams?.first { $0.index == index }?.name
+	}
 }
 
 public struct ActiveRound: Decodable, Sendable, Equatable {
@@ -141,6 +160,8 @@ public struct RoundResult: Decodable, Sendable, Equatable {
 	public let noGuessPlayerIds: [String]
 	/// Several on an exact tie, empty when nobody guessed.
 	public let winnerPlayerIds: [String]
+	/// Teams of the closest player(s), unique and ascending; only in a teams game.
+	public let winnerTeams: [Int]?
 	public let revealStartedAt: EpochMs
 	public let answerVisibleAt: EpochMs
 	public let skipped: Bool
@@ -157,20 +178,41 @@ public struct StandingRow: Decodable, Sendable, Equatable {
 	public let guessedRounds: Int
 }
 
+/// A team's line in a teams game, ranked by rounds won (a team scores at most 1 per round,
+/// when one of its players is closest). Teams without active members are left out.
+public struct TeamStandingRow: Decodable, Sendable, Equatable {
+	public let team: Int
+	/// As `TeamInfo.name`: nil means the default name.
+	public let name: String?
+	/// 1-based; equal `roundsWon` share a rank.
+	public let rank: Int
+	public let roundsWon: Int
+	/// The team's active players, in per-player standings order.
+	public let members: [StandingRow]
+}
+
 public enum NextStep: Decodable, Sendable, Equatable {
 	case round(number: Int)
-	case suddenDeath(eligiblePlayerIds: [String])
-	case finish(winnerPlayerIds: [String])
+	/// In a teams game `teams` are the tied teams and `eligiblePlayerIds` all their members.
+	case suddenDeath(eligiblePlayerIds: [String], teams: [Int]?)
+	/// In a teams game `winnerTeams` are the winning teams and `winnerPlayerIds` their members.
+	case finish(winnerPlayerIds: [String], winnerTeams: [Int]?)
 
-	private enum Keys: String, CodingKey { case kind, number, eligiblePlayerIds, winnerPlayerIds }
+	private enum Keys: String, CodingKey { case kind, number, eligiblePlayerIds, winnerPlayerIds, teams, winnerTeams }
 
 	public init(from decoder: Decoder) throws {
 		let c = try decoder.container(keyedBy: Keys.self)
 		let kind = try c.decode(String.self, forKey: .kind)
 		switch kind {
 		case "round": self = .round(number: try c.decode(Int.self, forKey: .number))
-		case "suddenDeath": self = .suddenDeath(eligiblePlayerIds: try c.decode([String].self, forKey: .eligiblePlayerIds))
-		case "finish": self = .finish(winnerPlayerIds: try c.decode([String].self, forKey: .winnerPlayerIds))
+		case "suddenDeath":
+			self = .suddenDeath(
+				eligiblePlayerIds: try c.decode([String].self, forKey: .eligiblePlayerIds),
+				teams: try c.decodeIfPresent([Int].self, forKey: .teams))
+		case "finish":
+			self = .finish(
+				winnerPlayerIds: try c.decode([String].self, forKey: .winnerPlayerIds),
+				winnerTeams: try c.decodeIfPresent([Int].self, forKey: .winnerTeams))
 		default: throw DecodingError.dataCorruptedError(forKey: .kind, in: c, debugDescription: "Unknown next step \(kind)")
 		}
 	}
@@ -187,7 +229,8 @@ public enum Phase: Sendable, Equatable {
 	case round(ActiveRound, lockedPlayerIds: [String])
 	case reveal(RoundResult, standings: [StandingRow])
 	case standings(RoundResult, standings: [StandingRow], next: NextStep)
-	case finished(standings: [StandingRow], winnerPlayerIds: [String], endedEarly: Bool)
+	/// `winnerTeams`: only in a teams game, the winning team(s) (`winnerPlayerIds` are their members).
+	case finished(standings: [StandingRow], winnerPlayerIds: [String], winnerTeams: [Int]?, endedEarly: Bool)
 }
 
 public struct TvSnapshot: Decodable, Sendable, Equatable {
@@ -198,10 +241,12 @@ public struct TvSnapshot: Decodable, Sendable, Equatable {
 	/// Only in `finished`: the code that pairs this screen with the next game.
 	public let nextPairing: PairingCode?
 	public let phase: Phase
+	/// Team standings in `reveal`, `standings` and `finished` of a teams game.
+	public let teamStandings: [TeamStandingRow]?
 
 	private enum Keys: String, CodingKey {
-		case serverNow, game, players, nextPairing, phase
-		case round, lockedPlayerIds, result, standings, next, winnerPlayerIds, endedEarly
+		case serverNow, game, players, nextPairing, phase, teamStandings
+		case round, lockedPlayerIds, result, standings, next, winnerPlayerIds, winnerTeams, endedEarly
 	}
 
 	public init(from decoder: Decoder) throws {
@@ -210,6 +255,7 @@ public struct TvSnapshot: Decodable, Sendable, Equatable {
 		game = try c.decode(GameInfo.self, forKey: .game)
 		players = try c.decode([Player].self, forKey: .players)
 		nextPairing = try c.decodeIfPresent(PairingCode.self, forKey: .nextPairing)
+		teamStandings = try c.decodeIfPresent([TeamStandingRow].self, forKey: .teamStandings)
 		let name = try c.decode(String.self, forKey: .phase)
 		switch name {
 		case "lobby":
@@ -234,6 +280,7 @@ public struct TvSnapshot: Decodable, Sendable, Equatable {
 			phase = .finished(
 				standings: try c.decode([StandingRow].self, forKey: .standings),
 				winnerPlayerIds: try c.decode([String].self, forKey: .winnerPlayerIds),
+				winnerTeams: try c.decodeIfPresent([Int].self, forKey: .winnerTeams),
 				endedEarly: try c.decode(Bool.self, forKey: .endedEarly)
 			)
 		default:
@@ -244,6 +291,9 @@ public struct TvSnapshot: Decodable, Sendable, Equatable {
 	public func player(_ id: String) -> Player? {
 		players.first { $0.id == id }
 	}
+
+	/// The game has teams.
+	public var isTeams: Bool { game.teams != nil }
 }
 
 /// One value of the TV stream.

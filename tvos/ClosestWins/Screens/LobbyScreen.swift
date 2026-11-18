@@ -2,6 +2,7 @@ import ClosestWinsCore
 import SwiftUI
 
 /// Waiting for players: the join QR code and the growing player list (`LobbyScreen.svelte`).
+/// In a teams game the players appear under their team's heading (every team, empty ones included).
 struct LobbyScreen: View {
 	@Environment(AppModel.self) private var model
 	let snap: TvSnapshot
@@ -100,7 +101,14 @@ struct LobbyScreen: View {
 					.foregroundStyle(Theme.ink2)
 				Text("/ \(model.shared.game.maxPlayers)").font(.rem(1)).foregroundStyle(Theme.ink3)
 			}
-			if players.isEmpty {
+			if let teams = snap.game.teams {
+				LazyVGrid(columns: [GridItem(.adaptive(minimum: rem(13)), spacing: rem(0.8))], alignment: .leading, spacing: rem(0.8)) {
+					ForEach(teams, id: \.index) { team in
+						teamCard(team, members: players.filter { $0.team == team.index }, font: min(font, 1.2))
+					}
+				}
+				.animation(.spring(duration: 0.6, bounce: 0.4), value: players.map(\.id))
+			} else if players.isEmpty {
 				Text(t.tv("waitingForPlayers"))
 					.font(.rem(1.4))
 					.foregroundStyle(Theme.ink3)
@@ -108,25 +116,51 @@ struct LobbyScreen: View {
 			} else {
 				LazyVGrid(columns: [GridItem(.adaptive(minimum: rem(width)), spacing: rem(0.6))], alignment: .leading, spacing: rem(0.6)) {
 					ForEach(players) { player in
-						HStack(spacing: rem(font * 0.5)) {
-							Avatar(nickname: player.nickname, color: player.color, size: rem(font * 1.7), offline: !player.connected)
-							Text(player.nickname)
-								.font(.rem(font, .bold))
-								.foregroundStyle(player.connected ? Theme.ink : Theme.ink3)
-								.lineLimit(1)
-							Spacer(minLength: 0)
-						}
-						.padding(.vertical, rem(font * 0.25))
-						.padding(.leading, rem(font * 0.3))
-						.padding(.trailing, rem(font * 0.7))
-						.background(.white.opacity(0.07), in: Capsule())
-						.transition(.scale(scale: 0.4).combined(with: .opacity))
+						chip(player, font: font)
 					}
 				}
 				.animation(.spring(duration: 0.6, bounce: 0.4), value: players.map(\.id))
 			}
 		}
 		.animation(.easeOut(duration: 0.3), value: players.count)
+	}
+
+	private func chip(_ player: Player, font: CGFloat) -> some View {
+		HStack(spacing: rem(font * 0.5)) {
+			Avatar(nickname: player.nickname, color: player.color, size: rem(font * 1.7), offline: !player.connected)
+			Text(player.nickname)
+				.font(.rem(font, .bold))
+				.foregroundStyle(player.connected ? Theme.ink : Theme.ink3)
+				.lineLimit(1)
+			Spacer(minLength: 0)
+		}
+		.padding(.vertical, rem(font * 0.25))
+		.padding(.leading, rem(font * 0.3))
+		.padding(.trailing, rem(font * 0.7))
+		.background(.white.opacity(0.07), in: Capsule())
+		.transition(.scale(scale: 0.4).combined(with: .opacity))
+	}
+
+	/// A team's heading with its player count, and its players one per line.
+	private func teamCard(_ team: TeamInfo, members: [Player], font: CGFloat) -> some View {
+		VStack(alignment: .leading, spacing: rem(0.5)) {
+			HStack(alignment: .firstTextBaseline, spacing: rem(0.6)) {
+				Text(model.t.teamName(team.index, team.name))
+					.font(.rem(1.5, .heavy))
+					.lineLimit(1)
+				Text("\(members.count)")
+					.font(.rem(1, .bold))
+					.monospacedDigit()
+					.foregroundStyle(Theme.ink3)
+			}
+			ForEach(members) { player in
+				chip(player, font: font)
+			}
+		}
+		.frame(maxWidth: .infinity, alignment: .topLeading)
+		.padding(.vertical, 1.4 * Theme.vh)
+		.padding(.horizontal, 1 * Theme.vw)
+		.background(.white.opacity(0.05), in: RoundedRectangle(cornerRadius: rem(1)))
 	}
 }
 

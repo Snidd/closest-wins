@@ -174,7 +174,8 @@ struct RevealCamera {
 	let insets: EdgeInsets
 	private let screen = CGSize(width: 100 * Theme.vw, height: 100 * Theme.vh)
 
-	/// The web caps the zoom (MapLibre zoom 4 for the pins, 7 for the answer). The same as the
+	/// The web caps the zoom (MapLibre zoom 4 for the pins, `RevealGeometry.answerMaxZoom` for the
+	/// answer: 7, or 10 when several guesses are very close). The same as the
 	/// least longitude the full screen width may show: 360° × width / (512 × 2^zoom).
 	private func minLngSpan(maxZoom: Double) -> Double {
 		360 * screen.width / (512 * pow(2, maxZoom))
@@ -190,7 +191,7 @@ struct RevealCamera {
 	func answer(_ result: RoundResult) -> MKMapRect {
 		let bounds = RevealGeometry.answerBounds(
 			target: GeoPoint(lat: result.target.lat, lng: result.target.lng), guesses: result.guesses)
-		return rect(bounds, minLngSpan: minLngSpan(maxZoom: 7))
+		return rect(bounds, minLngSpan: minLngSpan(maxZoom: RevealGeometry.answerMaxZoom(result.guesses)))
 	}
 
 	/// The camera a fraction `t` (0...1) of the way from `a` to `b`. The zoom changes evenly

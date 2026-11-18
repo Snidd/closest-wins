@@ -1,9 +1,10 @@
 import Foundation
 
 // What the reveal camera frames and the lines it draws: a port of `src/lib/map/reveal.ts` and
-// the helpers it uses from `src/lib/map/geometry.ts`. The numbers (minimum spans 1.5° and 20°,
-// rank ≤ 3, 3× the winner's distance, at least 600 km) are copied from there, not exported to
-// `shared.json`: change them in both places.
+// the helpers it uses from `src/lib/map/geometry.ts`. The numbers (minimum spans 1.5°, 0.1° and
+// 20°, rank ≤ 3, 3× the winner's distance, at least 600 km, close within 100 km, zoom caps 7 and
+// 10) are copied from there and from `src/lib/map/config.ts`, not exported to `shared.json`:
+// change them in both places.
 
 public struct GeoPoint: Sendable, Equatable {
 	public var lat: Double
@@ -31,6 +32,15 @@ public struct GeoBounds: Sendable, Equatable {
 public enum RevealGeometry {
 	/// Answer view: each side spans at least this many degrees.
 	public static let answerMinSpanDeg = 1.5
+	/// A guess this close to the target or closer (km) counts as very close.
+	public static let closeGuessKm = 100.0
+	/// Answer view in close mode: each side spans at least this many degrees (about 11 km).
+	public static let closeMinSpanDeg = 0.1
+	/// Zoom cap (MapLibre zoom) of the answer camera, so a lone close guess still shows some
+	/// surroundings.
+	public static let defaultAnswerMaxZoom = 7.0
+	/// The web map's highest zoom (`MAX_ZOOM`): the answer camera's cap in close mode.
+	public static let mapMaxZoom = 10.0
 	/// Suspense view (all guesses): each side spans at least this many degrees.
 	public static let guessesMinSpanDeg = 20.0
 	/// Latitudes the camera frames (just inside what Web Mercator can show).
@@ -48,10 +58,20 @@ public enum RevealGeometry {
 		ref + normalizeLng(lng - ref)
 	}
 
+	/// The very close guesses (within `closeGuessKm`) when there are at least two of them, else
+	/// `[]`. A non-empty list is "close mode": the camera frames only these and may zoom in further.
+	public static func closeGuesses(_ guesses: [RevealGuess]) -> [RevealGuess] {
+		let close = guesses.filter { $0.distanceKm <= closeGuessKm }
+		return close.count >= 2 ? close : []
+	}
+
 	/// Guesses the camera frames together with the target: the winners, plus the next closest
 	/// (rank ≤ 3) as long as they are not much farther away than the winner, so one wild guess
-	/// does not zoom the answer out to the whole world.
+	/// does not zoom the answer out to the whole world. In close mode (`closeGuesses`), exactly the
+	/// close guesses, so labels of guesses a few km apart do not collide.
 	public static func framedGuesses(_ guesses: [RevealGuess]) -> [RevealGuess] {
+		let close = closeGuesses(guesses)
+		if !close.isEmpty { return close }
 		let best = guesses.map(\.distanceKm).min() ?? .infinity
 		let limit = max(best * 3, 600)
 		return guesses.filter { $0.isWinner || ($0.rank <= 3 && $0.distanceKm <= limit) }
@@ -69,7 +89,13 @@ public enum RevealGeometry {
 			points += guessPath(from: GeoPoint(lat: g.lat, lng: g.lng), to: target)
 		}
 		let anchored = points.map { GeoPoint(lat: $0.lat, lng: unwrapLng($0.lng, ref: target.lng)) }
-		return padBounds(boundsOf(anchored)!, minSpanDeg: answerMinSpanDeg)
+		let minSpan = closeGuesses(guesses).isEmpty ? answerMinSpanDeg : closeMinSpanDeg
+		return padBounds(boundsOf(anchored)!, minSpanDeg: minSpan)
+	}
+
+	/// Zoom cap of the answer camera: `mapMaxZoom` in close mode, else `defaultAnswerMaxZoom`.
+	public static func answerMaxZoom(_ guesses: [RevealGuess]) -> Double {
+		closeGuesses(guesses).isEmpty ? defaultAnswerMaxZoom : mapMaxZoom
 	}
 
 	/// Bounds of all guesses, for the suspense view. Never depends on the target.
@@ -147,8 +173,14 @@ public enum RevealGeometry {
 		b.south = max(-cameraMaxLat, min(cameraMaxLat, b.south))
 		b.north = max(-cameraMaxLat, min(cameraMaxLat, b.north))
 		let need = min(minSpanDeg, 2 * cameraMaxLat)
+		// Only after clamping at a pole: away from them, rounding in `c ± span / 2` can leave the
+		// span a hair under `need`, which must not throw the box to the other pole.
 		if b.north - b.south < need {
-			if b.north >= cameraMaxLat { b.south = cameraMaxLat - need } else { b.north = -cameraMaxLat + need }
+			if b.north >= cameraMaxLat {
+				b.south = cameraMaxLat - need
+			} else if b.south <= -cameraMaxLat {
+				b.north = -cameraMaxLat + need
+			}
 		}
 		return b
 	}

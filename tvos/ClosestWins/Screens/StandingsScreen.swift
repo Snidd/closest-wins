@@ -68,7 +68,9 @@ struct StandingsScreen: View {
 	}
 
 	private func board(columns: Int, size: CGFloat) -> some View {
-		StandingsTable(rows: standings, moves: movement(standings: standings, result: result), columns: columns, size: size)
+		StandingsTable(
+			rows: standings, moves: movement(standings: standings, result: result), columns: columns, size: size,
+			teams: snap.teamStandings, highlightTeams: result.winnerTeams ?? [])
 			.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
 			.padding(rem(1.2))
 			.background(.white.opacity(0.035), in: RoundedRectangle(cornerRadius: rem(1.5)))
@@ -98,6 +100,11 @@ struct StandingsScreen: View {
 					if let winKm { Text("· \(t.km(winKm))").foregroundStyle(Theme.ink2) }
 				}
 				.font(.rem(1))
+				if let teams = result.winnerTeams, !teams.isEmpty {
+					Text(t.common("teamTookRound", ["team": .text(t.teamNames(teams, of: snap.game))]))
+						.font(.rem(1, .heavy))
+						.foregroundStyle(Theme.gold)
+				}
 			}
 		}
 		.frame(maxWidth: .infinity, alignment: .leading)
@@ -117,15 +124,19 @@ struct StandingsScreen: View {
 					Text("/ \(snap.game.totalRounds)").font(.rem(1.4)).foregroundStyle(Theme.ink3)
 				}
 			}
-		case .suddenDeath(let ids):
+		case .suddenDeath(let ids, let teams):
 			card(tint: Theme.red) {
 				HStack(spacing: rem(0.4)) {
 					Image(systemName: "bolt.fill").foregroundStyle(Theme.red)
 					Eyebrow(text: t.tv("upNext"), color: Color(hex: "#ff8a95"), size: 0.8)
 				}
 				Text(t.tv("suddenDeath")).font(.rem(2, .black))
-				Duellists(players: ids.compactMap(snap.player), size: 1.15)
-				Text(t.tv("duelHint"))
+				if let teams {
+					TeamDuel(teams: teams, game: snap.game, size: 1.15)
+				} else {
+					Duellists(players: ids.compactMap(snap.player), size: 1.15)
+				}
+				Text(teams != nil ? t.tv("duelHintTeams") : t.tv("duelHint"))
 					.font(.rem(0.9))
 					.foregroundStyle(Theme.ink2)
 					.fixedSize(horizontal: false, vertical: true)

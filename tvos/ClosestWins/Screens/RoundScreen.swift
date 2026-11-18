@@ -52,7 +52,7 @@ struct RoundScreen: View {
 
 			PlayersBar(
 				players: snap.players, lockedIds: lockedPlayerIds,
-				eligibleIds: round.eligiblePlayerIds, duel: round.isSuddenDeath
+				eligibleIds: round.eligiblePlayerIds, duel: round.isSuddenDeath, game: snap.game
 			)
 		}
 		.padding(.top, 2.6 * Theme.vh)
@@ -84,7 +84,13 @@ struct RoundScreen: View {
 				.padding(.vertical, rem(0.35))
 				.background(Theme.red, in: Capsule())
 				.shadow(color: Theme.red.opacity(0.6), radius: 16)
-				Duellists(players: round.eligiblePlayerIds.compactMap(snap.player), size: 2)
+				let duellists = round.eligiblePlayerIds.compactMap(snap.player)
+				if snap.isTeams {
+					// The tied teams playing the sudden death (the duellists' teams).
+					TeamDuel(teams: Array(Set(duellists.compactMap(\.team))).sorted(), game: snap.game, size: 2)
+				} else {
+					Duellists(players: duellists, size: 2)
+				}
 			}
 		} else {
 			VStack(spacing: rem(0.2)) {
@@ -128,6 +134,30 @@ struct Duellists: View {
 						.foregroundStyle(Color(hex: player.color, keep: 0.55))
 						.lineLimit(1)
 				}
+			}
+		}
+	}
+}
+
+/// The teams of a sudden death in a teams game, joined by "vs".
+struct TeamDuel: View {
+	@Environment(AppModel.self) private var model
+	let teams: [Int]
+	let game: GameInfo
+	/// Font size in rem.
+	let size: CGFloat
+
+	var body: some View {
+		HStack(spacing: rem(size * 0.4)) {
+			ForEach(Array(teams.enumerated()), id: \.element) { index, team in
+				if index > 0 {
+					Text(model.t.tv("versus").uppercased()).font(.rem(size * 0.6, .bold)).foregroundStyle(Theme.ink3)
+				}
+				Text(model.t.teamName(team, of: game))
+					.font(.rem(size, .heavy))
+					.lineLimit(1)
+					.frame(maxWidth: rem(size * 14))
+					.fixedSize()
 			}
 		}
 	}
@@ -271,13 +301,15 @@ struct PhotoFrame: View {
 	}
 }
 
-/// Who is guessing and who has locked in (`PlayersBar.svelte`).
+/// Who is guessing and who has locked in (`PlayersBar.svelte`). In a teams game each chip also
+/// names the player's team.
 struct PlayersBar: View {
 	@Environment(AppModel.self) private var model
 	let players: [Player]
 	let lockedIds: [String]
 	let eligibleIds: [String]
 	let duel: Bool
+	let game: GameInfo
 
 	var body: some View {
 		let t = model.t
@@ -350,12 +382,20 @@ struct PlayersBar: View {
 							.offset(x: rem(font * 0.25), y: rem(font * 0.2))
 					}
 				}
-			Text(player.nickname)
-				.font(.rem(font, .bold))
-				.strikethrough(!player.connected && !locked)
-				.lineLimit(1)
-				.frame(maxWidth: rem(font * 9), alignment: .leading)
-				.fixedSize()
+			VStack(alignment: .leading, spacing: 0) {
+				Text(player.nickname)
+					.font(.rem(font, .bold))
+					.strikethrough(!player.connected && !locked)
+					.lineLimit(1)
+				if game.teams != nil, let team = player.team {
+					Text(model.t.teamName(team, of: game))
+						.font(.rem(font * 0.68, .semibold))
+						.foregroundStyle(Theme.ink2)
+						.lineLimit(1)
+				}
+			}
+			.frame(maxWidth: rem(font * 9), alignment: .leading)
+			.fixedSize()
 		}
 		.padding(.vertical, rem(font * 0.2))
 		.padding(.leading, rem(font * 0.25))

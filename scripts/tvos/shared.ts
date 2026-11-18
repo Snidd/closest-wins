@@ -77,21 +77,11 @@ const SPECIAL: Record<string, Record<string, { kind: 'distance' } | { kind: 'omi
 };
 
 /**
- * Web-only strings, not exported at all: the Apple TV app does not show teams yet. Move a key
- * out of here (and run `pnpm tvos:export`) once the app uses it.
+ * Web-only strings, not exported at all: the phones' team strings, which the Apple TV app never
+ * shows. Move a key out of here (and run `pnpm tvos:export`) once the app uses it.
  */
 export const WEB_ONLY: Record<string, ReadonlySet<string>> = {
-	common: new Set([
-		'teamDefault',
-		'team',
-		'chooseTeam',
-		'teamRequired',
-		'teamPlayers',
-		'teamTookRound',
-		'teamWins',
-		'teamsShareWin'
-	]),
-	tv: new Set(['duelHintTeams'])
+	common: new Set(['team', 'chooseTeam', 'teamRequired', 'teamPlayers', 'teamWins', 'teamsShareWin'])
 };
 
 const DISTANCE_LOCALES = { en: 'en-GB', sv: 'sv-SE' } as const satisfies Record<Locale, string>;

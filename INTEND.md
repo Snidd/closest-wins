@@ -159,8 +159,8 @@ attaching a photo by URL. There are no game-control tools.
 - Mixing several playlists in one game.
 - Agent-driven game control through MCP.
 - Multi-instance or serverless deployment.
-- Teams in the Apple TV app and in the admin game history (both show players only for now),
-  team colours on pins, and changing a player's team or the team settings after creation.
+- Teams in the admin game history (it shows players only for now), team colours on pins, and
+  changing a player's team or the team settings after creation.
 
 ## Open questions
 

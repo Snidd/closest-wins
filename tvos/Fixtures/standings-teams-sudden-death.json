@@ -1,0 +1,248 @@
+{
+	"serverNow": 1794855652500,
+	"game": {
+		"id": "10000000-0000-4000-8000-000000000003",
+		"joinCode": "FXTM",
+		"joinUrl": "http://192.168.1.20:5173/join/FXTM",
+		"language": "en",
+		"playlistName": {
+			"nameSv": "Kända landmärken",
+			"nameEn": "Famous landmarks"
+		},
+		"timerSeconds": 30,
+		"totalRounds": 2,
+		"teams": [
+			{
+				"index": 0,
+				"name": "Foxes"
+			},
+			{
+				"index": 1,
+				"name": null
+			}
+		],
+		"teamPick": true
+	},
+	"players": [
+		{
+			"id": "20000000-0000-4000-8000-000000000008",
+			"nickname": "Eva",
+			"color": "#e6424a",
+			"connected": true,
+			"lateJoiner": false,
+			"team": 0
+		},
+		{
+			"id": "20000000-0000-4000-8000-000000000009",
+			"nickname": "Finn",
+			"color": "#2debf9",
+			"connected": true,
+			"lateJoiner": false,
+			"team": 1
+		},
+		{
+			"id": "20000000-0000-4000-8000-000000000010",
+			"nickname": "Gus",
+			"color": "#0867a9",
+			"connected": true,
+			"lateJoiner": false,
+			"team": 0
+		},
+		{
+			"id": "20000000-0000-4000-8000-000000000011",
+			"nickname": "Hana",
+			"color": "#519c03",
+			"connected": false,
+			"lateJoiner": false,
+			"team": 1
+		}
+	],
+	"role": "tv",
+	"status": "paired",
+	"phase": "standings",
+	"result": {
+		"round": {
+			"index": 1,
+			"number": 2,
+			"isSuddenDeath": false,
+			"eligiblePlayerIds": [
+				"20000000-0000-4000-8000-000000000008",
+				"20000000-0000-4000-8000-000000000009",
+				"20000000-0000-4000-8000-000000000010",
+				"20000000-0000-4000-8000-000000000011"
+			],
+			"clue": {
+				"textSv": "En jättelik röd sandstensklippa reser sig ur öknen.",
+				"textEn": "A giant red sandstone rock rises from the desert.",
+				"photo": null
+			},
+			"startedAt": 1794855652500,
+			"endedAt": 1794855652500
+		},
+		"target": {
+			"lat": -25.3444,
+			"lng": 131.0369,
+			"nameSv": "Uluru",
+			"nameEn": "Uluru",
+			"factSv": "Klippan reser sig ungefär 348 meter över slätten.",
+			"factEn": "The rock rises about 348 metres above the plain."
+		},
+		"guesses": [
+			{
+				"playerId": "20000000-0000-4000-8000-000000000009",
+				"lat": -25.2444,
+				"lng": 131.1369,
+				"distanceKm": 14.990484181681072,
+				"rank": 1,
+				"isWinner": true,
+				"locked": false,
+				"revealAt": 1794855653000
+			},
+			{
+				"playerId": "20000000-0000-4000-8000-000000000008",
+				"lat": -23.3444,
+				"lng": 133.0369,
+				"distanceKm": 300.83757536115536,
+				"rank": 2,
+				"isWinner": false,
+				"locked": false,
+				"revealAt": 1794855654000
+			},
+			{
+				"playerId": "20000000-0000-4000-8000-000000000010",
+				"lat": -22.3444,
+				"lng": 134.0369,
+				"distanceKm": 452.0349719285866,
+				"rank": 3,
+				"isWinner": false,
+				"locked": false,
+				"revealAt": 1794855653500
+			}
+		],
+		"noGuessPlayerIds": [
+			"20000000-0000-4000-8000-000000000011"
+		],
+		"winnerPlayerIds": [
+			"20000000-0000-4000-8000-000000000009"
+		],
+		"winnerTeams": [
+			1
+		],
+		"revealStartedAt": 1794855652500,
+		"answerVisibleAt": 1794855655500,
+		"skipped": false
+	},
+	"standings": [
+		{
+			"playerId": "20000000-0000-4000-8000-000000000009",
+			"nickname": "Finn",
+			"color": "#2debf9",
+			"rank": 1,
+			"roundsWon": 1,
+			"totalDistanceKm": 147.6888431323025,
+			"guessedRounds": 2,
+			"connected": true
+		},
+		{
+			"playerId": "20000000-0000-4000-8000-000000000008",
+			"nickname": "Eva",
+			"color": "#e6424a",
+			"rank": 1,
+			"roundsWon": 1,
+			"totalDistanceKm": 340.732233914684,
+			"guessedRounds": 2,
+			"connected": true
+		},
+		{
+			"playerId": "20000000-0000-4000-8000-000000000010",
+			"nickname": "Gus",
+			"color": "#0867a9",
+			"rank": 3,
+			"roundsWon": 0,
+			"totalDistanceKm": 716.610659729064,
+			"guessedRounds": 2,
+			"connected": true
+		},
+		{
+			"playerId": "20000000-0000-4000-8000-000000000011",
+			"nickname": "Hana",
+			"color": "#519c03",
+			"rank": 3,
+			"roundsWon": 0,
+			"totalDistanceKm": 0,
+			"guessedRounds": 0,
+			"connected": false
+		}
+	],
+	"teamStandings": [
+		{
+			"team": 0,
+			"name": "Foxes",
+			"rank": 1,
+			"roundsWon": 1,
+			"members": [
+				{
+					"playerId": "20000000-0000-4000-8000-000000000008",
+					"nickname": "Eva",
+					"color": "#e6424a",
+					"rank": 1,
+					"roundsWon": 1,
+					"totalDistanceKm": 340.732233914684,
+					"guessedRounds": 2,
+					"connected": true
+				},
+				{
+					"playerId": "20000000-0000-4000-8000-000000000010",
+					"nickname": "Gus",
+					"color": "#0867a9",
+					"rank": 3,
+					"roundsWon": 0,
+					"totalDistanceKm": 716.610659729064,
+					"guessedRounds": 2,
+					"connected": true
+				}
+			]
+		},
+		{
+			"team": 1,
+			"name": null,
+			"rank": 1,
+			"roundsWon": 1,
+			"members": [
+				{
+					"playerId": "20000000-0000-4000-8000-000000000009",
+					"nickname": "Finn",
+					"color": "#2debf9",
+					"rank": 1,
+					"roundsWon": 1,
+					"totalDistanceKm": 147.6888431323025,
+					"guessedRounds": 2,
+					"connected": true
+				},
+				{
+					"playerId": "20000000-0000-4000-8000-000000000011",
+					"nickname": "Hana",
+					"color": "#519c03",
+					"rank": 3,
+					"roundsWon": 0,
+					"totalDistanceKm": 0,
+					"guessedRounds": 0,
+					"connected": false
+				}
+			]
+		}
+	],
+	"next": {
+		"kind": "suddenDeath",
+		"eligiblePlayerIds": [
+			"20000000-0000-4000-8000-000000000008",
+			"20000000-0000-4000-8000-000000000010",
+			"20000000-0000-4000-8000-000000000009",
+			"20000000-0000-4000-8000-000000000011"
+		],
+		"teams": [
+			0,
+			1
+		]
+	}
+}

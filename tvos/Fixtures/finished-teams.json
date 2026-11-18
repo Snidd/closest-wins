@@ -1,0 +1,175 @@
+{
+	"serverNow": 1794855658500,
+	"game": {
+		"id": "10000000-0000-4000-8000-000000000003",
+		"joinCode": "FXTM",
+		"joinUrl": "http://192.168.1.20:5173/join/FXTM",
+		"language": "en",
+		"playlistName": {
+			"nameSv": "Kända landmärken",
+			"nameEn": "Famous landmarks"
+		},
+		"timerSeconds": 30,
+		"totalRounds": 2,
+		"teams": [
+			{
+				"index": 0,
+				"name": "Foxes"
+			},
+			{
+				"index": 1,
+				"name": null
+			}
+		],
+		"teamPick": true
+	},
+	"players": [
+		{
+			"id": "20000000-0000-4000-8000-000000000008",
+			"nickname": "Eva",
+			"color": "#e6424a",
+			"connected": true,
+			"lateJoiner": false,
+			"team": 0
+		},
+		{
+			"id": "20000000-0000-4000-8000-000000000009",
+			"nickname": "Finn",
+			"color": "#2debf9",
+			"connected": true,
+			"lateJoiner": false,
+			"team": 1
+		},
+		{
+			"id": "20000000-0000-4000-8000-000000000010",
+			"nickname": "Gus",
+			"color": "#0867a9",
+			"connected": true,
+			"lateJoiner": false,
+			"team": 0
+		},
+		{
+			"id": "20000000-0000-4000-8000-000000000011",
+			"nickname": "Hana",
+			"color": "#519c03",
+			"connected": false,
+			"lateJoiner": false,
+			"team": 1
+		}
+	],
+	"role": "tv",
+	"status": "paired",
+	"phase": "finished",
+	"standings": [
+		{
+			"playerId": "20000000-0000-4000-8000-000000000009",
+			"nickname": "Finn",
+			"color": "#2debf9",
+			"rank": 1,
+			"roundsWon": 1,
+			"totalDistanceKm": 365.15126738038555,
+			"guessedRounds": 3,
+			"connected": true
+		},
+		{
+			"playerId": "20000000-0000-4000-8000-000000000008",
+			"nickname": "Eva",
+			"color": "#e6424a",
+			"rank": 1,
+			"roundsWon": 1,
+			"totalDistanceKm": 631.0155851535787,
+			"guessedRounds": 3,
+			"connected": true
+		},
+		{
+			"playerId": "20000000-0000-4000-8000-000000000010",
+			"nickname": "Gus",
+			"color": "#0867a9",
+			"rank": 1,
+			"roundsWon": 1,
+			"totalDistanceKm": 774.4513925097655,
+			"guessedRounds": 3,
+			"connected": true
+		},
+		{
+			"playerId": "20000000-0000-4000-8000-000000000011",
+			"nickname": "Hana",
+			"color": "#519c03",
+			"rank": 4,
+			"roundsWon": 0,
+			"totalDistanceKm": 0,
+			"guessedRounds": 0,
+			"connected": false
+		}
+	],
+	"teamStandings": [
+		{
+			"team": 0,
+			"name": "Foxes",
+			"rank": 1,
+			"roundsWon": 2,
+			"members": [
+				{
+					"playerId": "20000000-0000-4000-8000-000000000008",
+					"nickname": "Eva",
+					"color": "#e6424a",
+					"rank": 1,
+					"roundsWon": 1,
+					"totalDistanceKm": 631.0155851535787,
+					"guessedRounds": 3,
+					"connected": true
+				},
+				{
+					"playerId": "20000000-0000-4000-8000-000000000010",
+					"nickname": "Gus",
+					"color": "#0867a9",
+					"rank": 1,
+					"roundsWon": 1,
+					"totalDistanceKm": 774.4513925097655,
+					"guessedRounds": 3,
+					"connected": true
+				}
+			]
+		},
+		{
+			"team": 1,
+			"name": null,
+			"rank": 2,
+			"roundsWon": 1,
+			"members": [
+				{
+					"playerId": "20000000-0000-4000-8000-000000000009",
+					"nickname": "Finn",
+					"color": "#2debf9",
+					"rank": 1,
+					"roundsWon": 1,
+					"totalDistanceKm": 365.15126738038555,
+					"guessedRounds": 3,
+					"connected": true
+				},
+				{
+					"playerId": "20000000-0000-4000-8000-000000000011",
+					"nickname": "Hana",
+					"color": "#519c03",
+					"rank": 4,
+					"roundsWon": 0,
+					"totalDistanceKm": 0,
+					"guessedRounds": 0,
+					"connected": false
+				}
+			]
+		}
+	],
+	"winnerPlayerIds": [
+		"20000000-0000-4000-8000-000000000008",
+		"20000000-0000-4000-8000-000000000010"
+	],
+	"winnerTeams": [
+		0
+	],
+	"endedEarly": false,
+	"nextPairing": {
+		"pairingCode": "215870",
+		"codeExpiresAt": 1794856258500
+	}
+}

@@ -87,6 +87,100 @@ import Testing
 		#expect(b.east > 180)
 	}
 
+	// Close mode: the same cases as `close mode` in `src/lib/map/reveal.test.ts`.
+
+	/// A guess the way the web tests write one: the winner is rank 1.
+	func g(_ id: String, _ lat: Double, _ lng: Double, _ km: Double, _ rank: Int) -> RevealGuess {
+		guess(id, km: km, rank: rank, winner: rank == 1, lat: lat, lng: lng)
+	}
+
+	let stockholm = GeoPoint(lat: 59.33, lng: 18.07)
+
+	func contains(_ b: GeoBounds, _ lat: Double, _ lng: Double) -> Bool {
+		lng >= b.west && lng <= b.east && lat >= b.south && lat <= b.north
+	}
+
+	@Test func closeModeIsOffWithoutCloseGuesses() {
+		let guesses = [g("a", 59, 18, 150, 1), g("b", 60, 19, 300, 2), g("c", -30, 150, 15000, 3)]
+		#expect(RevealGeometry.closeGuesses(guesses).isEmpty)
+		#expect(RevealGeometry.answerMaxZoom(guesses) == RevealGeometry.defaultAnswerMaxZoom)
+		#expect(RevealGeometry.framedGuesses(guesses).map(\.playerId) == ["a", "b"])
+	}
+
+	@Test func closeModeIsOffWithExactlyOneCloseGuess() {
+		let guesses = [
+			g("a", 59.42, 18.07, 10, 1),
+			g("b", 60.68, 18.07, 150, 2),
+			g("c", 54.0, 18.07, 600, 3),
+			g("d", 41.3, 18.07, 2000, 4)
+		]
+		#expect(RevealGeometry.closeGuesses(guesses).isEmpty)
+		#expect(RevealGeometry.framedGuesses(guesses).map(\.playerId) == ["a", "b", "c"])
+		#expect(RevealGeometry.answerMaxZoom(guesses) == RevealGeometry.defaultAnswerMaxZoom)
+		let b = RevealGeometry.answerBounds(
+			target: stockholm, guesses: [g("a", 59.42, 18.07, 10, 1), g("d", 41.3, 18.07, 2000, 4)])
+		#expect(b.lngSpan >= 1.5)
+		#expect(b.latSpan >= 1.5)
+	}
+
+	@Test func closeModeIsOnWithTwoOrMoreCloseGuesses() {
+		let guesses = [g("a", 59.37, 18.07, 5, 1), g("b", 59.33, 18.9, 40, 2), g("c", 59.33, 19.6, 90, 3)]
+		#expect(RevealGeometry.closeGuesses(guesses).map(\.playerId) == ["a", "b", "c"])
+		#expect(RevealGeometry.answerMaxZoom(guesses) == 10)
+	}
+
+	@Test func closeModeFramesOnlyTheCloseGuesses() {
+		let guesses = [
+			g("a", 59.375, 18.07, 5, 1), g("b", 59.33, 18.775, 40, 2),
+			g("c", 62.03, 18.07, 300, 3), g("d", 41.3, 18.07, 2000, 4)
+		]
+		#expect(RevealGeometry.framedGuesses(guesses).map(\.playerId) == ["a", "b"])
+		let b = RevealGeometry.answerBounds(target: stockholm, guesses: guesses)
+		#expect(contains(b, 59.375, 18.07))
+		#expect(contains(b, 59.33, 18.775))
+		#expect(!contains(b, 62.03, 18.07))
+	}
+
+	@Test func closeModeFramesTiedWinners() {
+		let guesses = [g("a", 59.6, 18.07, 30, 1), g("b", 59.06, 18.07, 30, 1), g("c", 50, 10, 1100, 3)]
+		#expect(guesses.filter(\.isWinner).count == 2)
+		#expect(RevealGeometry.closeGuesses(guesses).map(\.playerId) == ["a", "b"])
+		#expect(RevealGeometry.framedGuesses(guesses).map(\.playerId) == ["a", "b"])
+	}
+
+	@Test func aGuessAtExactlyTheCloseDistanceCounts() {
+		let a = g("a", 59.37, 18.07, 5, 1)
+		let km = RevealGeometry.closeGuessKm
+		#expect(RevealGeometry.closeGuesses([a, g("b", 60.23, 18.07, km, 2)]).map(\.playerId) == ["a", "b"])
+		#expect(RevealGeometry.closeGuesses([a, g("b", 60.23, 18.07, km + 0.01, 2)]).isEmpty)
+	}
+
+	@Test func closeModeBoundsStayCompactAcrossTheAntimeridian() {
+		// Near Fiji, close enough to ±180 that guesses on both sides are within 100 km.
+		let fiji = GeoPoint(lat: -17.7, lng: 179.7)
+		let guesses = [g("a", -17.7, 179.6, 11, 1), g("b", -17.75, -179.8, 53, 2)]
+		#expect(RevealGeometry.answerMaxZoom(guesses) == 10)
+		let b = RevealGeometry.answerBounds(target: fiji, guesses: guesses)
+		#expect(b.west < b.east)
+		#expect(b.lngSpan < 2)
+	}
+
+	@Test func closeModePadsToTheCloseMinimumSpan() {
+		let guesses = [g("a", 59.357, 18.07, 3, 1), g("b", 59.33, 18.158, 5, 2)]
+		let b = RevealGeometry.answerBounds(target: stockholm, guesses: guesses)
+		for span in [b.lngSpan, b.latSpan] {
+			#expect(span >= RevealGeometry.closeMinSpanDeg - 1e-9)
+			#expect(span < 1.5)
+		}
+	}
+
+	@Test func padBoundsKeepsASmallSpanInPlace() {
+		// 59.3435 ± 0.05 spans 0.0999999… in floating point.
+		let b = RevealGeometry.padBounds(GeoBounds(west: 18, south: 59.33, east: 18.2, north: 59.357), minSpanDeg: 0.1)
+		#expect(abs(b.south - 59.2935) < 1e-9)
+		#expect(abs(b.north - 59.3935) < 1e-9)
+	}
+
 	@Test func guessesBoundsSpanAtLeastTwentyDegrees() {
 		let b = RevealGeometry.guessesBounds([GeoPoint(lat: 10, lng: 10)])
 		#expect(b?.latSpan == 20)

@@ -149,7 +149,19 @@
 				"disconnected": "Disconnected",
 				"reconnecting": "Reconnecting…",
 				"languageSv": "Swedish",
-				"languageEn": "English"
+				"languageEn": "English",
+				"teamDefault": {
+					"params": [
+						"n"
+					],
+					"template": "Team {n}"
+				},
+				"teamTookRound": {
+					"params": [
+						"team"
+					],
+					"template": "{team} took the round"
+				}
 			},
 			"sv": {
 				"appName": "Närmast vinner",
@@ -277,7 +289,19 @@
 				"disconnected": "Frånkopplad",
 				"reconnecting": "Återansluter…",
 				"languageSv": "Svenska",
-				"languageEn": "Engelska"
+				"languageEn": "Engelska",
+				"teamDefault": {
+					"params": [
+						"n"
+					],
+					"template": "Lag {n}"
+				},
+				"teamTookRound": {
+					"params": [
+						"team"
+					],
+					"template": "{team} tog rundan"
+				}
 			}
 		},
 		"tv": {
@@ -435,7 +459,8 @@
 				},
 				"finalStandings": "Final standings",
 				"nextGame": "New game? Pair with",
-				"reconnecting": "Reconnecting…"
+				"reconnecting": "Reconnecting…",
+				"duelHintTeams": "Only the tied teams’ players guess. Closest takes the game for their team."
 			},
 			"sv": {
 				"pairingTitle": "Para ihop skärmen",
@@ -583,7 +608,8 @@
 				},
 				"finalStandings": "Slutställning",
 				"nextGame": "Nytt spel? Para ihop med",
-				"reconnecting": "Återansluter…"
+				"reconnecting": "Återansluter…",
+				"duelHintTeams": "Bara spelarna i lagen som delar ledningen gissar. Närmast vinner spelet åt sitt lag."
 			}
 		}
 	},

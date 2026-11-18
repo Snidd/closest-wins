@@ -18,7 +18,14 @@ import Testing
 		"standings": "standings",
 		"standings-sudden-death": "standings",
 		"standings-final": "standings",
-		"finished": "finished"
+		"finished": "finished",
+		"lobby-teams": "lobby",
+		"round-teams": "round",
+		"round-teams-sudden-death": "round",
+		"reveal-teams": "reveal",
+		"standings-teams": "standings",
+		"standings-teams-sudden-death": "standings",
+		"finished-teams": "finished"
 	]
 
 	static func kind(_ state: TvState) -> String {
@@ -105,17 +112,19 @@ import Testing
 			return next
 		}
 		#expect(try next("standings") == .round(number: 2))
-		guard case .suddenDeath(let duel) = try next("standings-sudden-death") else {
+		guard case .suddenDeath(let duel, let teams) = try next("standings-sudden-death") else {
 			Issue.record("not sudden death")
 			return
 		}
 		#expect(duel.count == 2)
-		#expect(try next("standings-final") == .finish(winnerPlayerIds: ["20000000-0000-4000-8000-000000000001"]))
+		#expect(teams == nil)
+		#expect(
+			try next("standings-final") == .finish(winnerPlayerIds: ["20000000-0000-4000-8000-000000000001"], winnerTeams: nil))
 	}
 
 	@Test func finishedHasNextPairingCode() throws {
 		let snap = try #require(try fixture("finished").snapshot)
-		guard case .finished(let standings, let winners, let endedEarly) = snap.phase else {
+		guard case .finished(let standings, let winners, let winnerTeams, let endedEarly) = snap.phase else {
 			Issue.record("not finished")
 			return
 		}
@@ -123,6 +132,71 @@ import Testing
 		#expect(winners == ["20000000-0000-4000-8000-000000000001"])
 		#expect(!endedEarly)
 		#expect(standings.count == 4)
+		#expect(winnerTeams == nil)
+		#expect(snap.teamStandings == nil)
+		#expect(!snap.isTeams)
+	}
+
+	// Teams: the third fixture game has two teams (Foxes, and one with the default name) that tie
+	// after two rounds; the Foxes take the sudden death.
+
+	@Test func teamsLobbyHasEveryTeamAndEachPlayersTeam() throws {
+		let snap = try #require(try fixture("lobby-teams").snapshot)
+		#expect(snap.isTeams)
+		#expect(snap.game.teams == [TeamInfo(index: 0, name: "Foxes"), TeamInfo(index: 1, name: nil)])
+		#expect(snap.game.teamPick == true)
+		#expect(snap.players.map(\.team) == [0, 1, 0, 1])
+		let t = Strings(try loadShared(), .en)
+		#expect(t.teamName(0, of: snap.game) == "Foxes")
+		#expect(t.teamName(1, of: snap.game) == "Team 2")
+		#expect(Strings(try loadShared(), .sv).teamName(1, of: snap.game) == "Lag 2")
+		#expect(t.teamNames([0, 1], of: snap.game) == "Foxes & Team 2")
+		#expect(t.teamName(2, "  ") == "Team 3")
+	}
+
+	@Test func teamsRevealCarriesWinnerTeamsAndTeamStandings() throws {
+		let snap = try #require(try fixture("reveal-teams").snapshot)
+		guard case .reveal(let result, _) = snap.phase else {
+			Issue.record("not a reveal")
+			return
+		}
+		#expect(result.winnerTeams == [0])
+		let teams = try #require(snap.teamStandings)
+		#expect(teams.map(\.team) == [0, 1])
+		#expect(teams[0].roundsWon == 1)
+		#expect(teams[0].members.map(\.nickname) == ["Eva", "Gus"])
+		#expect(teams[1].name == nil)
+		#expect(Strings(try loadShared(), .en).common("teamTookRound", ["team": "Foxes"]) == "Foxes took the round")
+	}
+
+	@Test func teamsSuddenDeathNamesTheTiedTeams() throws {
+		let snap = try #require(try fixture("standings-teams-sudden-death").snapshot)
+		guard case .standings(_, _, .suddenDeath(let ids, let teams)) = snap.phase else {
+			Issue.record("not a teams sudden death")
+			return
+		}
+		#expect(teams == [0, 1])
+		#expect(ids.count == 4)
+		#expect(snap.teamStandings?.allSatisfy { $0.rank == 1 } == true)
+		let round = try #require(try fixture("round-teams-sudden-death").snapshot)
+		guard case .round(let active, _) = round.phase else {
+			Issue.record("not a round")
+			return
+		}
+		#expect(active.isSuddenDeath)
+		#expect(Set(active.eligiblePlayerIds) == Set(ids))
+	}
+
+	@Test func teamsFinishedHasWinnerTeams() throws {
+		let snap = try #require(try fixture("finished-teams").snapshot)
+		guard case .finished(_, let winners, let winnerTeams, _) = snap.phase else {
+			Issue.record("not finished")
+			return
+		}
+		#expect(winnerTeams == [0])
+		#expect(winners.count == 2)
+		#expect(snap.teamStandings?.first?.team == 0)
+		#expect(snap.teamStandings?.first?.roundsWon == 2)
 	}
 
 	@Test func movementSinceTheLastRound() throws {

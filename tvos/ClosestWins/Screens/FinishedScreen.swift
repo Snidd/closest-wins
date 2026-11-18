@@ -2,12 +2,15 @@ import ClosestWinsCore
 import SwiftUI
 
 /// The end of the game: the winner, the final table, and the code that pairs this screen with
-/// the next game (`FinishedScreen.svelte`).
+/// the next game (`FinishedScreen.svelte`). In a teams game the winning team(s) are named, with
+/// their members on the podium.
 struct FinishedScreen: View {
 	@Environment(AppModel.self) private var model
 	let snap: TvSnapshot
 	let standings: [StandingRow]
 	let winnerPlayerIds: [String]
+	/// Only in a teams game.
+	let winnerTeams: [Int]?
 	let endedEarly: Bool
 
 	var body: some View {
@@ -23,8 +26,8 @@ struct FinishedScreen: View {
 					VStack(alignment: .leading, spacing: rem(0.8)) {
 						Eyebrow(text: t.tv("finalStandings"), size: 0.9)
 						StandingsTable(
-							rows: standings, size: standings.count <= 6 ? 1.25 : 1.05,
-							max: standings.count > 9 ? 8 : 9)
+							rows: standings, columns: snap.teamStandings != nil ? 2 : 1, size: standings.count <= 6 ? 1.25 : 1.05,
+							max: standings.count > 9 ? 8 : 9, teams: snap.teamStandings, highlightTeams: winnerTeams ?? [])
 						Spacer(minLength: 0)
 					}
 					.padding(rem(1.3))
@@ -70,11 +73,28 @@ struct FinishedScreen: View {
 				Text(t.tv("noWinner")).font(.rem(3, .black))
 				Text(t.tv("noWinnerHint")).font(.rem(1.3)).foregroundStyle(Theme.ink2)
 			} else {
-				let single = winners.count == 1
+				// Teams game: the winning teams decide single or shared; the podium shows their members.
+				let single = (winnerTeams?.count ?? winners.count) == 1
 				let longest = winners.map(\.nickname.count).max() ?? 0
-				let nameSize: CGFloat = single ? (longest <= 8 ? 6 : longest <= 12 ? 4.8 : 3.8) : (longest <= 8 ? 3 : 2.4)
-				let avatar = single ? min(rem(11), 24 * Theme.vh) : min(rem(7), 16 * Theme.vh)
-				HStack(alignment: .top, spacing: rem(2)) {
+				let nameSize: CGFloat =
+					if winnerTeams != nil { winners.count <= 2 ? 2.6 : winners.count <= 4 ? 2 : 1.5 } else if single {
+						longest <= 8 ? 6 : longest <= 12 ? 4.8 : 3.8
+					} else { longest <= 8 ? 3 : 2.4 }
+				let avatar =
+					winnerTeams != nil ? min(rem(5), 11 * Theme.vh) : single ? min(rem(11), 24 * Theme.vh) : min(rem(7), 16 * Theme.vh)
+				if let winnerTeams {
+					Text(t.teamNames(winnerTeams, of: snap.game))
+						.font(.rem(4.4, .black))
+						.foregroundStyle(Theme.gold)
+						.multilineTextAlignment(.center)
+						.lineLimit(2)
+						.minimumScaleFactor(0.5)
+				}
+				// A team's members wrap onto more lines; a lone winner or a shared win stays on one.
+				let podium =
+					winnerTeams != nil
+					? AnyLayout(FlowLayout(spacing: rem(1.2), centered: true)) : AnyLayout(HStackLayout(alignment: .top, spacing: rem(2)))
+				podium {
 					ForEach(winners, id: \.playerId) { winner in
 						VStack(spacing: rem(0.3)) {
 							Crown(size: avatar * 0.32)
@@ -92,9 +112,11 @@ struct FinishedScreen: View {
 					.font(.rem(2.4, .heavy))
 					.foregroundStyle(Theme.gold)
 				let first = winners[0]
+				let teamRow = snap.teamStandings?.first { $0.team == winnerTeams?.first }
 				Text(
-					t.tv("roundsWon", ["n": .int(first.roundsWon)])
-						+ (single && first.guessedRounds > 0 ? " · " + t.tv("totalKm", ["km": .text(t.km(first.totalDistanceKm))]) : "")
+					t.tv("roundsWon", ["n": .int(teamRow?.roundsWon ?? first.roundsWon)])
+						+ (single && winnerTeams == nil && first.guessedRounds > 0
+							? " · " + t.tv("totalKm", ["km": .text(t.km(first.totalDistanceKm))]) : "")
 				)
 				.font(.rem(1.3))
 				.foregroundStyle(Theme.ink2)

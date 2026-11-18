@@ -89,7 +89,7 @@ export function closeGuesses(guesses: RevealGuess[]): RevealGuess[] {
  * (rank ≤ 3) as long as they are not much farther away than the winner, so one wild guess
  * does not zoom the answer out to the whole world. In close mode (`closeGuesses`), exactly the
  * close guesses, so labels of guesses a few km apart do not collide.
- * The tvOS port (`tvos/Core/Sources/ClosestWinsCore/RevealGeometry.swift`) has no close mode yet.
+ * Ported to tvOS in `tvos/Core/Sources/ClosestWinsCore/RevealGeometry.swift`: change both.
  */
 export function framedGuesses(guesses: RevealGuess[]): RevealGuess[] {
 	const close = closeGuesses(guesses);

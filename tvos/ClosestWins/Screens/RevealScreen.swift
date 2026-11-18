@@ -223,6 +223,16 @@ struct RevealScreen: View {
 					if let km = result.guesses.first(where: { $0.isWinner })?.distanceKm {
 						Text(t.tv("away", ["km": .text(t.km(km))])).font(.rem(1.05)).foregroundStyle(Theme.ink2)
 					}
+					if let teams = result.winnerTeams, !teams.isEmpty {
+						Text(t.common("teamTookRound", ["team": .text(t.teamNames(teams, of: snap.game))]))
+							.font(.rem(1.3, .heavy))
+							.foregroundStyle(Theme.onGold)
+							.multilineTextAlignment(.center)
+							.padding(.horizontal, rem(1))
+							.padding(.vertical, rem(0.25))
+							.background(Theme.gold, in: Capsule())
+							.padding(.top, rem(0.4))
+					}
 				}
 			}
 			.frame(maxWidth: .infinity)

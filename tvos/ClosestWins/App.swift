@@ -63,8 +63,10 @@ struct RootView: View {
 					RevealScreen(snap: snap, result: result, model: model)
 				case .standings(let result, let standings, let next):
 					StandingsScreen(snap: snap, result: result, standings: standings, next: next)
-				case .finished(let standings, let winners, let endedEarly):
-					FinishedScreen(snap: snap, standings: standings, winnerPlayerIds: winners, endedEarly: endedEarly)
+				case .finished(let standings, let winners, let winnerTeams, let endedEarly):
+					FinishedScreen(
+						snap: snap, standings: standings, winnerPlayerIds: winners, winnerTeams: winnerTeams,
+						endedEarly: endedEarly)
 				}
 			}
 		}

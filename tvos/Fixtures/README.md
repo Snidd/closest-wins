@@ -19,8 +19,15 @@ The Swift decoding tests decode every file here.
 | `standings-sudden-death.json` | standings, next step: sudden death |
 | `standings-final.json` | standings, next step: finish |
 | `finished.json` | final standings with `nextPairing` |
+| `lobby-teams.json` | teams game lobby: two teams (one custom name, one default), one player disconnected |
+| `round-teams.json` | teams game round, one player locked in |
+| `reveal-teams.json` | teams game reveal with `winnerTeams` and `teamStandings` |
+| `standings-teams.json` | teams game standings, next step: a regular round |
+| `standings-teams-sudden-death.json` | teams tied, next step: sudden death between both teams |
+| `round-teams-sudden-death.json` | the teams' sudden-death round |
+| `finished-teams.json` | teams game over, `winnerTeams` and team standings |
 
-They come from two small games played through the real engine with a fake clock. Ids, join
+They come from three small games played through the real engine with a fake clock. Ids, join
 and pairing codes, photo keys and the server origin are replaced by fixed placeholders, so the
 files only change when the output does. Running rounds contain no answer (the test asserts it).
 
