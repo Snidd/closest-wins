@@ -46,6 +46,10 @@ export function locationOut(l: Location, photo: Photo | null, ctx: ViewContext):
 		factEn: l.factEn,
 		lat: l.lat,
 		lng: l.lng,
+		startView:
+			l.startLat !== null && l.startLng !== null && l.startZoom !== null
+				? { lat: l.startLat, lng: l.startLng, zoom: l.startZoom }
+				: null,
 		photo: photo ? photoOut(photo, ctx) : null,
 		missingTranslations: locationMissing(l),
 		updatedAt: l.updatedAt.toISOString()

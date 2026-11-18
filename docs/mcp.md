@@ -67,10 +67,10 @@ and what to do: `Invalid input: <field>: <reason>. ...`, `Not found: ...`, `Refu
 | Tool | What it does |
 |---|---|
 | `list_locations` | List / free-text search locations (both languages), paginated (`limit` ≤ 200, `offset`, `nextOffset`). Compact summaries. |
-| `get_location` | One location with all texts, photo and usage (playlists, games played). |
-| `create_location` | Create a location; optional `photo: {url, attribution, sourceUrl}` is downloaded and attached. |
+| `get_location` | One location with all texts, start view, photo and usage (playlists, games played). |
+| `create_location` | Create a location; optional `photo: {url, attribution, sourceUrl}` is downloaded and attached; optional `startView: {lat, lng, zoom}` (see below). |
 | `create_locations` | Create up to 25 locations in one call; per-item result (`ok` + location, or `error`). Not all-or-nothing. |
-| `update_location` | Change only the fields sent; `null` or `""` clears a text. |
+| `update_location` | Change only the fields sent; `null` or `""` clears a text, `startView: null` removes the start view. |
 | `delete_location` | Delete a location (removed from playlists). Refused if it was played in a game. |
 | `attach_photo_from_url` | Download an image and set it as a location's clue photo (replaces the old one). |
 | `remove_photo` | Remove a location's photo (refused if it is the only clue). |
@@ -87,6 +87,11 @@ and what to do: `Invalid input: <field>: <reason>. ...`, `Not found: ...`, `Refu
 The server's `instructions` (sent on `initialize`) brief the agent on the game: coordinates must be
 the precise point, players only see the clue (never put the name in it), both languages should be
 written, and how photos are imported.
+
+A location's optional `startView: {lat, lng, zoom}` (zoom 0-10) is where the players' guess maps
+open during its round instead of the whole world; all three values or none. It is a hint the
+players see, so it should frame a region (e.g. the country), not centre on the answer point.
+Locations return it as `startView` (`null` when unset).
 
 Validation is shared with the admin UI: tool arguments are converted in
 `src/lib/server/mcp/schemas.ts` and parsed with the valibot schemas in

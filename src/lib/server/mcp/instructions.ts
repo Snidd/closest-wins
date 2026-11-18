@@ -11,6 +11,7 @@ LOCATIONS
 - Players see ONLY the clue during the round (the photo and/or clueText). The name and the fact are shown after the reveal. So the clue must not contain the name or an obvious giveaway (no place names, no captions or signs naming it). A good clue can be reasoned about: landscape, vegetation, architecture, climate, a script on signs, a riddle-like description. Prefer recognisable places that are fun to locate on a map without labels.
 - Fields: name (what the place is called, shown at the reveal); clueText (shown during the round; optional when there is a photo); fact (optional, 1-3 short, true and surprising sentences shown at the reveal); photo (optional clue image).
 - Rules: a location needs a name in at least one language and a clue (a photo, a clue text, or both).
+- startView (optional { lat, lng, zoom }) is where the players' maps open during the round instead of the whole world. It is a hint, so keep it fair: frame a region such as the country (zoom about 4-5), never centre it on the answer point. Leave it out to start from the whole world.
 - Photos are imported from a URL (create_location's "photo" field or attach_photo_from_url): the server downloads the image, strips its metadata and stores its own copies. Use a direct link to the image file (e.g. upload.wikimedia.org; Wikimedia thumbnails only exist at standard widths such as 330px, 500px, 960px or 1280px, other widths fail), choose images whose license allows reuse, and fill in attribution (author and license) and sourceUrl (the page describing the image).
 
 LANGUAGES

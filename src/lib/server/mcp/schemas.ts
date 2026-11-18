@@ -15,10 +15,12 @@
  *
  * Wire conventions: bilingual text is flat `<field>Sv` / `<field>En` like the DB rows. In patch
  * tools an omitted field is unchanged and `null` or `""` clears it (valibot patch schemas use
- * `""` for "clear", so `null` is mapped to `""` here).
+ * `""` for "clear", so `null` is mapped to `""` here). The start view is one nested `startView`
+ * object (flat `startLat` / `startLng` / `startZoom` in valibot; `null` → `clearStartView`).
  */
 import { z } from 'zod';
 import { MAX_LOCATION_LAT } from '#lib/geo.ts';
+import { MAX_ZOOM, MIN_ZOOM } from '#lib/map/config.ts';
 import {
 	ImportPhotoSchema,
 	ListQuerySchema,
@@ -103,6 +105,24 @@ const lng = z
 	.max(180)
 	.describe('Longitude in decimal degrees (WGS84, east positive) of the PRECISE answer point, e.g. 2.294481.');
 
+export const StartViewArg = z
+	.strictObject({
+		lat: z
+			.number()
+			.min(-MAX_LOCATION_LAT)
+			.max(MAX_LOCATION_LAT)
+			.describe(`Latitude of the map centre, between -${MAX_LOCATION_LAT} and ${MAX_LOCATION_LAT}.`),
+		lng: z.number().min(-180).max(180).describe('Longitude of the map centre.'),
+		zoom: z
+			.number()
+			.min(MIN_ZOOM)
+			.max(MAX_ZOOM)
+			.describe(`Map zoom, ${MIN_ZOOM}-${MAX_ZOOM} (about 1.2 shows the whole world, 4-5 a country).`)
+	})
+	.describe(
+		"Optional start view: where the players' guess maps open during the round instead of the whole world. It is a hint, so frame a region (e.g. the country) rather than centring it on the answer point."
+	);
+
 const httpUrl = z.url({ protocol: /^https?$/ }).max(LIMITS.url);
 
 const photoMeta = {
@@ -151,6 +171,7 @@ export const CreateLocationArgs = z.strictObject({
 	...locationTexts(false),
 	lat,
 	lng,
+	startView: StartViewArg.nullish().describe(`${StartViewArg.description} Omit or null for none.`),
 	photo: PhotoArg.optional()
 });
 
@@ -168,7 +189,10 @@ export const UpdateLocationArgs = z.strictObject({
 	id: locationId(),
 	...locationTexts(true),
 	lat: lat.optional(),
-	lng: lng.optional()
+	lng: lng.optional(),
+	startView: StartViewArg.nullish().describe(
+		`${StartViewArg.description} Omit to keep the current value; null removes it.`
+	)
 });
 
 export const ListPlaylistsArgs = z.strictObject({
@@ -272,7 +296,10 @@ export function toLocationInput(args: CreateLocationArgs, photoId: string | null
 		...Object.fromEntries(LOCATION_TEXT_FIELDS.map((f) => [f, str(args[f])])),
 		lat: args.lat,
 		lng: args.lng,
-		photoId: photoId ?? ''
+		photoId: photoId ?? '',
+		...(args.startView
+			? { startLat: args.startView.lat, startLng: args.startView.lng, startZoom: args.startView.zoom }
+			: {})
 	});
 }
 
@@ -281,6 +308,12 @@ export function toLocationPatch(args: UpdateLocationArgs): LocationPatch {
 	for (const f of LOCATION_TEXT_FIELDS) if (args[f] !== undefined) raw[f] = str(args[f]);
 	if (args.lat !== undefined) raw.lat = args.lat;
 	if (args.lng !== undefined) raw.lng = args.lng;
+	if (args.startView === null) raw.clearStartView = true;
+	else if (args.startView) {
+		raw.startLat = args.startView.lat;
+		raw.startLng = args.startView.lng;
+		raw.startZoom = args.startView.zoom;
+	}
 	return parseContent(LocationPatchSchema, raw);
 }
 
@@ -354,6 +387,10 @@ export const LocationOut = z.object({
 	factEn: nullableText,
 	lat: z.number(),
 	lng: z.number(),
+	startView: z
+		.object({ lat: z.number(), lng: z.number(), zoom: z.number() })
+		.nullable()
+		.describe("Where the players' guess maps open, or null for the whole world."),
 	photo: PhotoOut.nullable(),
 	missingTranslations: MissingOut,
 	updatedAt: z.string()
