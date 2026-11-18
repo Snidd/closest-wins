@@ -280,7 +280,7 @@
 		width: 14rem;
 		height: 9rem;
 	}
-	input {
+	input[type='number'] {
 		width: 7rem;
 		padding: var(--space-1);
 		border: 1px solid var(--color-border);
