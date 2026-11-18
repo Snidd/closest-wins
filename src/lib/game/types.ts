@@ -384,6 +384,17 @@ export interface OwnGuess {
 	lockedAt: EpochMs | null;
 }
 
+/**
+ * Where a location's guess map opens (centre + zoom), set by the admin as a hint. The only
+ * location data besides the clue sent while a round runs; read from its own columns, never
+ * derived from the answer. Players only (not in `ActiveRound`, so host and TV never get it).
+ */
+export interface MapStartView {
+	lat: number;
+	lng: number;
+	zoom: number;
+}
+
 /** The player's own outcome; show it once `serverNow + offset >= answerShownAt(result)`. */
 export interface OwnResult {
 	distanceKm: number | null;
@@ -399,6 +410,8 @@ export type PlayerPhase =
 			/** False when spectating (sudden death between others) or joined mid-round. */
 			canGuess: boolean;
 			myGuess: OwnGuess | null;
+			/** Where the guess map opens when there is no own cross yet; null: the whole world. */
+			startView: MapStartView | null;
 	  })
 	| (RevealState & { myResult: OwnResult | null })
 	| (StandingsState & { myResult: OwnResult | null })

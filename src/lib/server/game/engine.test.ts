@@ -6,7 +6,7 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { and, eq } from 'drizzle-orm';
 import { client, db } from '#lib/server/db/index.ts';
-import { game, gameRound, guess, player } from '#lib/server/db/schema.ts';
+import { game, gameRound, guess, location, player } from '#lib/server/db/schema.ts';
 import { REVEAL_HOLD_MS, REVEAL_PIN_STEP_MS } from '#lib/game/reveal.ts';
 import {
 	expectedStateOf,
@@ -1238,6 +1238,12 @@ describe('the answer never leaks before reveal', () => {
 			attribution: `${l0.name} by CreditMarker, CC BY-SA 4.0`,
 			sourceUrl: `https://commons.example.org/wiki/File:${l0.name}_SourceMarker.jpg`
 		});
+		// The admin's start view goes to the players (only), from its own columns.
+		const startView = { lat: 47.123987, lng: 9.456321, zoom: 4.25 };
+		await db
+			.update(location)
+			.set({ startLat: startView.lat, startLng: startView.lng, startZoom: startView.zoom })
+			.where(eq(location.id, l0.id));
 		await startRound(gameId);
 		// Bob's distinctive cross must not reach Alice (or the TV/host) either.
 		const bobPos = { lat: 33.987123, lng: -44.876543 };
@@ -1274,6 +1280,13 @@ describe('the answer never leaks before reveal', () => {
 			}
 			expect(json).not.toContain('"result"');
 			expect(json).not.toContain('"target"');
+			if (s.role === 'player') {
+				if (s.status !== 'playing' || s.phase !== 'round') throw new Error('expected a round');
+				expect(s.startView).toEqual(startView);
+			} else {
+				expect(json).not.toContain('"startView"');
+				expect(json).not.toContain('123987');
+			}
 		}
 
 		// Once revealed, the answer is there, and the photo credit with it.

@@ -24,6 +24,7 @@ import {
 	type GameInfo,
 	type HostSnapshot,
 	type HostTvStatus,
+	type MapStartView,
 	type OwnGuess,
 	type OwnResult,
 	type PhaseState,
@@ -41,7 +42,7 @@ import {
 import { gameVersion, subscriberCount } from './events.ts';
 import { connectedPlayerIds, isPresent } from './presence.ts';
 import { deps } from './deps.ts';
-import { clues, playlistNames, revealedClues, targets } from './library.ts';
+import { clues, playlistNames, revealedClues, startViews, targets } from './library.ts';
 import { roundWinnerTeams, type RoundOutcome } from './rules.ts';
 import {
 	activePlayers,
@@ -80,6 +81,8 @@ interface GameModel {
 	tv: HostTvStatus;
 	current: GameRound | null;
 	phase: PhaseState;
+	/** The running round's guess map start view (round phase only). Player snapshots only. */
+	startView: MapStartView | null;
 }
 
 export function joinUrl(joinCode: string): string {
@@ -233,6 +236,7 @@ async function loadModelIn(ex: Executor, gameId: string): Promise<GameModel | nu
 		rows.map((r) => ({ ...r, connected: connected.has(r.playerId) }));
 
 	const guessesByPlayer = new Map<string, OwnGuess>();
+	let startView: MapStartView | null = null;
 	let phase: PhaseState;
 	switch (g.phase) {
 		case 'lobby':
@@ -242,8 +246,9 @@ async function loadModelIn(ex: Executor, gameId: string): Promise<GameModel | nu
 			if (!current || !current.startedAt || !current.endsAt || current.endedAt) {
 				throw new Error(`Game ${g.id} is in 'round' without a running round`);
 			}
-			const [clueMap, rows] = await Promise.all([
+			const [clueMap, startViewMap, rows] = await Promise.all([
 				clues([current.locationId], ex),
+				startViews([current.locationId], ex),
 				ex
 					.select({
 						playerId: guess.playerId,
@@ -263,6 +268,7 @@ async function loadModelIn(ex: Executor, gameId: string): Promise<GameModel | nu
 					lockedAt: r.lockedAt?.getTime() ?? null
 				});
 			}
+			startView = startViewMap.get(current.locationId) ?? null;
 			const locked = rows.filter((r) => r.lockedAt !== null);
 			const activeIds = new Set(active.map((p) => p.id));
 			const round: ActiveRound = {
@@ -335,7 +341,8 @@ async function loadModelIn(ex: Executor, gameId: string): Promise<GameModel | nu
 		roundsPlayed: regularRoundsStarted(rounds),
 		tv: { paired: tvs.length > 0, connected: tvs.some((t) => isPresent(gameId, `tv:${t.id}`)) },
 		current,
-		phase
+		phase,
+		startView
 	};
 }
 
@@ -447,7 +454,7 @@ export async function buildPlayerStateForGame(
 			const canGuess = isEligible(round, me);
 			// The caller's own cross only.
 			const myGuess = canGuess ? (m.guessesByPlayer.get(me.id) ?? null) : null;
-			return { ...base, ...phase, canGuess, myGuess };
+			return { ...base, ...phase, canGuess, myGuess, startView: m.startView };
 		}
 		case 'reveal':
 		case 'standings':
