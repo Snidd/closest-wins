@@ -184,9 +184,11 @@ export function padBounds(bounds: Bounds, minSpanDeg: number): Bounds {
 	s = clampLat(s);
 	n = clampLat(n);
 	const need = Math.min(minSpanDeg, 2 * CAMERA_MAX_LAT);
+	// Only after clamping at a pole: away from them, rounding in `c ± span / 2` can leave the
+	// span a hair under `need`, which must not throw the box to the other pole.
 	if (n - s < need) {
 		if (n >= CAMERA_MAX_LAT) s = CAMERA_MAX_LAT - need;
-		else n = -CAMERA_MAX_LAT + need;
+		else if (s <= -CAMERA_MAX_LAT) n = -CAMERA_MAX_LAT + need;
 	}
 	return [
 		[w, s],
