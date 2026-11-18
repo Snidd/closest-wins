@@ -157,9 +157,13 @@ export interface PhotoLocation {
 
 /**
  * A location with a generated photo (and a clue text), written straight to Postgres and
- * DATA_DIR/media. Delete the games using it before `cleanup()`.
+ * DATA_DIR/media, optionally with a start view for the guess map. Delete the games using it
+ * before `cleanup()`.
  */
-export async function insertPhotoLocation(tag: string): Promise<PhotoLocation> {
+export async function insertPhotoLocation(
+	tag: string,
+	opts: { startView?: { lat: number; lng: number; zoom: number } } = {}
+): Promise<PhotoLocation> {
 	const fileKey = `e2e-${randomBytes(6).toString('hex')}`;
 	const dir = path.resolve(process.env.DATA_DIR ?? './data', 'media', fileKey);
 	await mkdir(dir, { recursive: true });
@@ -181,11 +185,13 @@ export async function insertPhotoLocation(tag: string): Promise<PhotoLocation> {
 		insert into photo (file_key, width, height, attribution, source_url)
 		values (${fileKey}, 1920, 1200, ${`E2E ${tag} / CC0`}, null) returning id`;
 	const [loc] = await sqlc<{ id: string }[]>`
-		insert into location (name_en, name_sv, clue_text_en, clue_text_sv, fact_en, fact_sv, lat, lng, photo_id)
+		insert into location (name_en, name_sv, clue_text_en, clue_text_sv, fact_en, fact_sv, lat, lng, photo_id,
+			start_lat, start_lng, start_zoom)
 		values (${`E2E ${tag} Lake Bled`}, ${`E2E ${tag} Bledsjön`},
 			'A church on a tiny island in an Alpine lake.', 'En kyrka på en liten ö i en alpsjö.',
 			'The only natural island in Slovenia.', 'Sloveniens enda naturliga ö.',
-			46.3625, 14.0936, ${photo!.id})
+			46.3625, 14.0936, ${photo!.id},
+			${opts.startView?.lat ?? null}, ${opts.startView?.lng ?? null}, ${opts.startView?.zoom ?? null})
 		returning id`;
 	return {
 		id: loc!.id,

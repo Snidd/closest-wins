@@ -10,7 +10,7 @@ import { eq, inArray } from 'drizzle-orm';
 import sharp from 'sharp';
 import * as v from 'valibot';
 import { afterAll, describe, expect, it } from 'vitest';
-import { LocationInputSchema, type LocationInput } from '#lib/content/schemas.ts';
+import { LocationInputSchema, LocationPatchSchema, type LocationInput } from '#lib/content/schemas.ts';
 import { client, db } from '#lib/server/db/index.ts';
 import { game, gameRound, location, photo, playlist } from '#lib/server/db/schema.ts';
 import { mediaDir } from '../files/paths.ts';
@@ -170,6 +170,58 @@ describe('locations', () => {
 		expect(updated.nameEn).toBe(l.nameEn); // untouched
 		expect(updated.lat).toBe(-33.5);
 		expect(updated.updatedAt.getTime()).toBeGreaterThanOrEqual(l.updatedAt.getTime());
+	});
+
+	it('stores, keeps, replaces and clears an optional start view', async () => {
+		const start = { startLat: 62.5, startLng: 16.25, startZoom: 4.5 };
+		const none = await newLocation();
+		expect(none).toMatchObject({ startLat: null, startLng: null, startZoom: null });
+		const l = await newLocation(start);
+		expect(l).toMatchObject(start);
+
+		const patch = (p: Partial<v.InferInput<typeof LocationPatchSchema>>) =>
+			updateLocation(parseContent(LocationPatchSchema, { id: l.id, ...p }));
+		// Omitted: unchanged.
+		expect(await patch({ nameSv: `${TAG} Startvy` })).toMatchObject(start);
+		// All three: set.
+		expect(await patch({ startLat: -10, startLng: -170.5, startZoom: 0 })).toMatchObject({
+			startLat: -10,
+			startLng: -170.5,
+			startZoom: 0
+		});
+		// clearStartView alone: cleared.
+		expect(await patch({ clearStartView: true })).toMatchObject({ startLat: null, startLng: null, startZoom: null });
+		expect(await patch(start)).toMatchObject(start);
+	});
+
+	it('rejects partial, contradictory and out-of-range start views', async () => {
+		const l = await newLocation();
+		const patch = (p: Partial<v.InferInput<typeof LocationPatchSchema>>) =>
+			Promise.resolve().then(() => updateLocation(parseContent(LocationPatchSchema, { id: l.id, ...p })));
+		const create = (p: Partial<v.InferInput<typeof LocationInputSchema>>) =>
+			Promise.resolve().then(() => createLocation(input(p)));
+
+		await expectCode(create({ startLat: 1, startLng: 2 }), 'INVALID', /start view/);
+		await expectCode(create({ startZoom: 3 }), 'INVALID', /start view/);
+		await expectCode(create({ startLat: 1, startLng: 2, startZoom: 10.5 }), 'INVALID', /startZoom/);
+		await expectCode(create({ startLat: 1, startLng: 2, startZoom: -1 }), 'INVALID', /startZoom/);
+		await expectCode(create({ startLat: 86, startLng: 2, startZoom: 3 }), 'INVALID', /startLat: Latitude/);
+		await expectCode(create({ startLat: 1, startLng: 181, startZoom: 3 }), 'INVALID', /startLng/);
+
+		await expectCode(patch({ startLat: 1 }), 'INVALID', /start view/);
+		await expectCode(patch({ clearStartView: true, startLat: 1, startLng: 2, startZoom: 3 }), 'INVALID', /clear the start view or set it/);
+		await expectCode(patch({ startLat: 1, startLng: 2, startZoom: 11 }), 'INVALID', /startZoom/);
+		await expectCode(patch({ startLat: -85.5, startLng: 2, startZoom: 3 }), 'INVALID', /Latitude/);
+
+		// The content module checks the merged row too (callers that skip the schema).
+		await expectCode(updateLocation({ id: l.id, startLat: 1 }), 'INVALID', /start view/);
+		await expectCode(createLocation({ ...input(), startLat: 1, startLng: 2, startZoom: 99 }), 'INVALID', /startZoom/);
+		await expectCode(
+			updateLocation({ id: l.id, clearStartView: true, startLat: 1, startLng: 2, startZoom: 3 }),
+			'INVALID',
+			/clear the start view or set it/
+		);
+		expect(await getLocation(l.id)).toMatchObject({ startLat: null, startLng: null, startZoom: null });
 	});
 
 	it('refuses to delete a played location (IN_USE) and deletes unplayed ones', async () => {

@@ -3,8 +3,9 @@
  * raw input with the same schemas before calling a service).
  */
 import * as v from 'valibot';
-import { LATITUDE_RANGE_MESSAGE, TEXT_MAX } from '#lib/content/schemas.ts';
+import { LATITUDE_RANGE_MESSAGE, START_VIEW_ALL_OR_NONE_MESSAGE, TEXT_MAX } from '#lib/content/schemas.ts';
 import { MAX_LOCATION_LAT } from '#lib/geo.ts';
+import { MAX_ZOOM, MIN_ZOOM } from '#lib/map/config.ts';
 import type { Locale } from '#lib/i18n/locale.ts';
 import { ContentError } from './errors.ts';
 
@@ -57,6 +58,9 @@ export interface LocationShapeForCheck {
 	lat: number;
 	lng: number;
 	photoId: string | null;
+	startLat: number | null;
+	startLng: number | null;
+	startZoom: number | null;
 }
 
 /**
@@ -76,12 +80,30 @@ export function checkLocation(l: LocationShapeForCheck): void {
 	if (!Number.isFinite(l.lng) || l.lng < -180 || l.lng > 180) {
 		throw new ContentError('INVALID', 'Longitude must be between -180 and 180');
 	}
+	checkStartView(l);
 	checkLength('nameSv', l.nameSv, TEXT_MAX.name);
 	checkLength('nameEn', l.nameEn, TEXT_MAX.name);
 	checkLength('clueTextSv', l.clueTextSv, TEXT_MAX.clue);
 	checkLength('clueTextEn', l.clueTextEn, TEXT_MAX.clue);
 	checkLength('factSv', l.factSv, TEXT_MAX.fact);
 	checkLength('factEn', l.factEn, TEXT_MAX.fact);
+}
+
+/** The optional start view: all three or none, within the same limits as the schema. */
+function checkStartView(l: Pick<LocationShapeForCheck, 'startLat' | 'startLng' | 'startZoom'>): void {
+	const given = [l.startLat, l.startLng, l.startZoom].filter((n) => n !== null).length;
+	if (given === 0) return;
+	if (given !== 3) throw new ContentError('INVALID', START_VIEW_ALL_OR_NONE_MESSAGE);
+	const { startLat, startLng, startZoom } = l as { startLat: number; startLng: number; startZoom: number };
+	if (!Number.isFinite(startLat) || startLat < -MAX_LOCATION_LAT || startLat > MAX_LOCATION_LAT) {
+		throw new ContentError('INVALID', `startLat: ${LATITUDE_RANGE_MESSAGE}`);
+	}
+	if (!Number.isFinite(startLng) || startLng < -180 || startLng > 180) {
+		throw new ContentError('INVALID', 'startLng: Longitude must be between -180 and 180');
+	}
+	if (!Number.isFinite(startZoom) || startZoom < MIN_ZOOM || startZoom > MAX_ZOOM) {
+		throw new ContentError('INVALID', `startZoom: Zoom must be between ${MIN_ZOOM} and ${MAX_ZOOM}`);
+	}
 }
 
 /** postgres.js error code of a failed drizzle query (drizzle wraps it in `cause`). */

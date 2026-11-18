@@ -372,6 +372,29 @@ describe('tools', () => {
 		expect(res.results[2]).toMatchObject({ index: 2, ok: true });
 	});
 
+	it('sets, returns and clears a start view', async () => {
+		const startView = { lat: 62.5, lng: 16.25, zoom: 4.5 };
+		const a = await call('create_location', { nameEn: `${TAG} Start`, clueTextEn: 'clue', lat: 59.3, lng: 18.1, startView });
+		const id = track('locations', a.location.id);
+		expect(a.location.startView).toEqual(startView);
+		expect((await call('get_location', { id })).location.startView).toEqual(startView);
+
+		const b = await call('create_location', { nameEn: `${TAG} No start`, clueTextEn: 'clue', lat: 1, lng: 1, startView: null });
+		track('locations', b.location.id);
+		expect(b.location.startView).toBeNull();
+
+		const moved = await call('update_location', { id, startView: { lat: 1, lng: 2, zoom: 3 } });
+		expect(moved.location.startView).toEqual({ lat: 1, lng: 2, zoom: 3 });
+		const renamed = await call('update_location', { id, nameSv: `${TAG} Startvy` });
+		expect(renamed.location.startView).toEqual({ lat: 1, lng: 2, zoom: 3 });
+		const cleared = await call('update_location', { id, startView: null });
+		expect(cleared.location.startView).toBeNull();
+		expect((await call('get_location', { id })).location.startView).toBeNull();
+
+		expect(await callError('update_location', { id, startView: { lat: 1, lng: 2, zoom: 11 } })).toMatch(/zoom/);
+		expect(await callError('update_location', { id, startView: { lat: 1, lng: 2 } })).toMatch(/zoom/);
+	});
+
 	it('reports invalid input naming the field', async () => {
 		const long = await callError('create_location', { nameSv: 'x'.repeat(121), clueTextSv: 'c', lat: 1, lng: 1 });
 		expect(long).toMatch(/nameSv/);

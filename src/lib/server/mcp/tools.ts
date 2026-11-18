@@ -186,7 +186,7 @@ export function registerTools(server: McpServer, ctx: ViewContext): void {
 	register(server, 'get_location', {
 		title: 'Get a location',
 		description:
-			'Returns one location with all texts in both languages, coordinates, photo (URL, attribution, source), missing translations, and usage (how many playlists contain it and how many games it was played in).',
+			'Returns one location with all texts in both languages, coordinates, start view, photo (URL, attribution, source), missing translations, and usage (how many playlists contain it and how many games it was played in).',
 		input: S.IdArgs('location'),
 		output: S.GetLocationOut,
 		annotations: READ_ONLY,
@@ -196,7 +196,7 @@ export function registerTools(server: McpServer, ctx: ViewContext): void {
 	register(server, 'create_location', {
 		title: 'Create a location',
 		description:
-			'Creates one location. Required: lat/lng (the precise answer point), a name in at least one language, and a clue (clueTextSv/clueTextEn and/or photo). Write both Swedish and English whenever you can. The optional photo is downloaded from its URL and stored. Returns the new location with its id. To create several, use create_locations.',
+			'Creates one location. Required: lat/lng (the precise answer point), a name in at least one language, and a clue (clueTextSv/clueTextEn and/or photo). Write both Swedish and English whenever you can. The optional photo is downloaded from its URL and stored. The optional startView is where the guess maps of the players open (frame a region, not the answer). Returns the new location with its id. To create several, use create_locations.',
 		input: S.CreateLocationArgs,
 		output: S.LocationResultOut,
 		annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
@@ -230,13 +230,15 @@ export function registerTools(server: McpServer, ctx: ViewContext): void {
 	register(server, 'update_location', {
 		title: 'Update a location',
 		description:
-			'Changes only the fields you send (e.g. add a translation, fix coordinates); omitted fields keep their value, null or "" clears a text. The location must still have a name and a clue afterwards. Use attach_photo_from_url / remove_photo for the photo. Returns the updated location.',
+			'Changes only the fields you send (e.g. add a translation, fix coordinates); omitted fields keep their value, null or "" clears a text, startView: null removes the start view. The location must still have a name and a clue afterwards. Use attach_photo_from_url / remove_photo for the photo. Returns the updated location.',
 		input: S.UpdateLocationArgs,
 		output: S.LocationResultOut,
 		annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
 		run: async (args) => {
 			const patch = S.toLocationPatch(args);
-			if (Object.keys(patch).every((k) => k === 'id' || patch[k as keyof typeof patch] === undefined)) {
+			const unchanged = (k: string) =>
+				k === 'id' || (k === 'clearStartView' ? !patch.clearStartView : patch[k as keyof typeof patch] === undefined);
+			if (Object.keys(patch).every(unchanged)) {
 				throw new ContentError('INVALID', 'Nothing to update: send at least one field besides id');
 			}
 			const row = await updateLocation(patch);

@@ -76,6 +76,14 @@ export const location = pgTable(
 		lat: doublePrecision('lat').notNull(),
 		lng: doublePrecision('lng').notNull(),
 		photoId: uuid('photo_id').references(() => photo.id, { onDelete: 'set null' }),
+		/**
+		 * Optional start view of the players' guess map (centre + zoom): all three or none. A hint
+		 * the admin chose, never derived from `lat`/`lng`. The upper zoom limit (`MAX_ZOOM`) is
+		 * enforced by the content schema, not here.
+		 */
+		startLat: doublePrecision('start_lat'),
+		startLng: doublePrecision('start_lng'),
+		startZoom: doublePrecision('start_zoom'),
 		createdAt: createdAt(),
 		updatedAt: updatedAt()
 	},
@@ -88,7 +96,14 @@ export const location = pgTable(
 			sql`${t.photoId} IS NOT NULL OR ${filled('clue_text_sv')} OR ${filled('clue_text_en')}`
 		),
 		check('location_lat_ck', sql`${t.lat} BETWEEN -90 AND 90`),
-		check('location_lng_ck', sql`${t.lng} BETWEEN -180 AND 180`)
+		check('location_lng_ck', sql`${t.lng} BETWEEN -180 AND 180`),
+		check(
+			'location_start_view_ck',
+			sql`(${t.startLat} IS NULL AND ${t.startLng} IS NULL AND ${t.startZoom} IS NULL) OR (${t.startLat} IS NOT NULL AND ${t.startLng} IS NOT NULL AND ${t.startZoom} IS NOT NULL)`
+		),
+		check('location_start_lat_ck', sql`${t.startLat} BETWEEN -90 AND 90`),
+		check('location_start_lng_ck', sql`${t.startLng} BETWEEN -180 AND 180`),
+		check('location_start_zoom_ck', sql`${t.startZoom} >= 0`)
 	]
 );
 

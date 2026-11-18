@@ -14,7 +14,10 @@ export const TILE_MAX_ZOOM = 8;
 export const MAX_ZOOM = 10;
 export const MIN_ZOOM = 0;
 
-/** Full world view every round starts from. */
+/**
+ * Full world view. A round's guess map starts here unless the location has a start view (or the
+ * player already has a cross).
+ */
 export const WORLD_VIEW = {
 	center: [10, 25] as [lng: number, lat: number],
 	zoom: 1.2

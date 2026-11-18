@@ -1,6 +1,8 @@
 <!--
   Phone guessing map: full-bleed, one finger pans, two fingers pinch-zoom (no rotation or
-  pitch), double tap zooms in. A fixed cross at the exact centre marks the guess.
+  pitch), double tap zooms in. A fixed cross at the exact centre marks the guess. It opens at
+  `initialCenter` / `initialZoom` (the player's own cross, or the location's start view) or else
+  at the world view.
 
   ```svelte
   <GuessMap
@@ -66,7 +68,10 @@
 	import { useMapTheme } from './theme.svelte.ts';
 
 	type Props = {
-		/** Restore a previous cross position (e.g. after a reload). Read once on mount. */
+		/**
+		 * Where the map opens: a previous cross position (e.g. after a reload) or a start view.
+		 * Null: the world view. Read once on mount; opening here does not count as `touched`.
+		 */
 		initialCenter?: { lat: number; lng: number } | null;
 		/** Zoom for `initialCenter` (default 4). Read once on mount. */
 		initialZoom?: number;

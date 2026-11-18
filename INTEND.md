@@ -50,7 +50,10 @@ closest to the real point wins the round.
 
 ### Guessing rules
 
-- The map resets to the full world view at the start of every round.
+- Each round's map starts from the location's start view (a centre and zoom the admin chose as
+  a hint, e.g. the country) when one is set, otherwise from the full world view. After a reload
+  mid-round the player's own cross is restored instead. Opening on the start view does not count
+  as touching the map.
 - A locked-in guess is final for that round **(assumed)**.
 - If the timer runs out without a lock-in, the position under the cross counts, but only if
   the player panned or zoomed at least once that round. A player who never touched the map has

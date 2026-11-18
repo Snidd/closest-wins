@@ -8,7 +8,12 @@
  */
 import { and, count, countDistinct, desc, eq, ilike, or, sql, type SQL } from 'drizzle-orm';
 import type { Locale } from '#lib/i18n/locale.ts';
-import type { LocationInput, LocationPatch, ListQuery } from '#lib/content/schemas.ts';
+import {
+	START_VIEW_CLEAR_AND_SET_MESSAGE,
+	type LocationInput,
+	type LocationPatch,
+	type ListQuery
+} from '#lib/content/schemas.ts';
 import { db } from '#lib/server/db/index.ts';
 import {
 	gameRound,
@@ -134,7 +139,10 @@ function normalize(input: LocationInput) {
 		factEn: clean(input.factEn),
 		lat: input.lat,
 		lng: input.lng,
-		photoId: input.photoId ?? null
+		photoId: input.photoId ?? null,
+		startLat: input.startLat,
+		startLng: input.startLng,
+		startZoom: input.startZoom
 	};
 }
 
@@ -163,8 +171,13 @@ export async function createLocation(input: LocationInput): Promise<Location> {
 
 const PATCH_TEXT_FIELDS = ['nameSv', 'nameEn', 'clueTextSv', 'clueTextEn', 'factSv', 'factEn'] as const;
 
-/** Applies the patch; the merged row must still have a name and a photo or clue text. */
-export async function updateLocation(patch: LocationPatch): Promise<Location> {
+/**
+ * Applies the patch; the merged row must still have a name and a photo or clue text, and a start
+ * view with all three fields or none. `clearStartView` (default false) removes the start view.
+ */
+export async function updateLocation(
+	patch: Omit<LocationPatch, 'clearStartView'> & { clearStartView?: boolean }
+): Promise<Location> {
 	if (!isUuid(patch.id)) throw new ContentError('NOT_FOUND', 'Location not found');
 
 	const changes: Partial<typeof location.$inferInsert> = {};
@@ -174,6 +187,16 @@ export async function updateLocation(patch: LocationPatch): Promise<Location> {
 	if (patch.lat !== undefined) changes.lat = patch.lat;
 	if (patch.lng !== undefined) changes.lng = patch.lng;
 	if (patch.photoId !== undefined) changes.photoId = patch.photoId ?? null;
+	if (patch.clearStartView) {
+		if (patch.startLat !== undefined || patch.startLng !== undefined || patch.startZoom !== undefined) {
+			throw new ContentError('INVALID', START_VIEW_CLEAR_AND_SET_MESSAGE);
+		}
+		changes.startLat = changes.startLng = changes.startZoom = null;
+	} else {
+		if (patch.startLat !== undefined) changes.startLat = patch.startLat;
+		if (patch.startLng !== undefined) changes.startLng = patch.startLng;
+		if (patch.startZoom !== undefined) changes.startZoom = patch.startZoom;
+	}
 
 	let previousPhotoId: string | null = null;
 	let updated: Location;

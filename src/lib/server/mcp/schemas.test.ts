@@ -17,6 +17,7 @@ import {
 	SetPlaylistItemsSchema,
 	TEXT_MAX
 } from '#lib/content/schemas.ts';
+import { MAX_ZOOM, MIN_ZOOM } from '#lib/map/config.ts';
 import * as S from './schemas.ts';
 
 function same(name: string, zod: z.ZodType, valibot: v.GenericSchema, samples: unknown[]) {
@@ -53,6 +54,17 @@ describe('MCP zod shapes match the shared valibot schemas', () => {
 		expect(v.safeParse(LocationFields.entries.lat, 85).success).toBe(true);
 		expect(v.safeParse(LocationFields.entries.lat, 85.0001).success).toBe(false);
 		same('lng', create.lng, LocationFields.entries.lng, [...nums(-180, 180), 179.999999, 0]);
+
+		const start = S.StartViewArg.shape;
+		same('startView.lat', start.lat, LocationFields.entries.startLat, [...nums(-85, 85), 85.04, -89.999999, 90, 0]);
+		same('startView.lng', start.lng, LocationFields.entries.startLng, [...nums(-180, 180), 179.999999, 0]);
+		same('startView.zoom', start.zoom, LocationFields.entries.startZoom, [...nums(MIN_ZOOM, MAX_ZOOM), 1.2, 10.0001]);
+		for (const args of [S.CreateLocationArgs, S.UpdateLocationArgs]) {
+			expect(args.shape.startView.safeParse(null).success).toBe(true);
+			expect(args.shape.startView.safeParse(undefined).success).toBe(true);
+			expect(args.shape.startView.safeParse({ lat: 1, lng: 2 }).success).toBe(false);
+			expect(args.shape.startView.safeParse({ lat: 1, lng: 2, zoom: 3, extra: 1 }).success).toBe(false);
+		}
 	});
 
 	it('playlist fields and lists', () => {
