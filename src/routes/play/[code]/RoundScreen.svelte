@@ -1,7 +1,9 @@
 <!--
   A running round: full-screen map with the centre cross, the clue and the countdown on top,
   the lock-in button at the bottom (thumb reach). Mounted once per round (keyed by index), so
-  the map starts at the world view, or at the player's own cross after a refresh.
+  the map starts at the player's own cross after a refresh, otherwise at the location's start
+  view (`s.startView`, a hint the admin chose) or, without one, at the world view. Opening on
+  the start view does not touch the map: it is no guess until the player moves it.
 
   Guess rules mirrored here (the server is authoritative):
   - `updateGuess` on every debounced map change, retried on network errors until just past the
@@ -26,10 +28,11 @@
 	const t = useT(player);
 
 	// Identity of this round (the component is keyed by it).
-	const { gameId, roundIndex, initialGuess } = untrack(() => ({
+	const { gameId, roundIndex, initialGuess, startView } = untrack(() => ({
 		gameId: s.game.id,
 		roundIndex: s.round.index,
-		initialGuess: s.myGuess
+		initialGuess: s.myGuess,
+		startView: s.startView
 	}));
 
 	const round = $derived(s.round);
@@ -60,8 +63,10 @@
 		}
 		return undefined;
 	}
-	const initialCenter = initialGuess ? { lat: initialGuess.lat, lng: initialGuess.lng } : null;
-	const initialZoom = savedZoom();
+	const initialCenter = initialGuess
+		? { lat: initialGuess.lat, lng: initialGuess.lng }
+		: startView && { lat: startView.lat, lng: startView.lng };
+	const initialZoom = initialGuess ? savedZoom() : startView?.zoom;
 
 	let map = $state<GuessMap>();
 	let touched = $state(untrack(() => !!initialGuess?.touched || initialGuess?.lockedAt != null));

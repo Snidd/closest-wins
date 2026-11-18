@@ -5,6 +5,7 @@
  * page. Needs the dev database (pnpm seed) and data/map/world.pmtiles.
  */
 import { expect, test, type Browser } from '@playwright/test';
+import { WORLD_VIEW } from '../src/lib/map/config.ts';
 import { closeDb, currentGuess, db, playerIdByNickname } from './helpers/db.ts';
 import { WEBGL_LAUNCH } from './helpers/env.ts';
 import {
@@ -15,7 +16,15 @@ import {
 	type Bot,
 	type TestGame
 } from './helpers/fixtures.ts';
-import { GUESS_DEBOUNCE_WAIT, joinViaUi, newPhone, panMap, steerTo, type PhoneOptions } from './helpers/phone.ts';
+import {
+	GUESS_DEBOUNCE_WAIT,
+	joinViaUi,
+	mapReady,
+	newPhone,
+	panMap,
+	steerTo,
+	type PhoneOptions
+} from './helpers/phone.ts';
 import { remoteId } from './helpers/remote.ts';
 import { SimPlayer } from './helpers/sim.ts';
 
@@ -328,6 +337,44 @@ test('photo clue opens full screen and closes again (button and Back)', async ({
 	await expect(page.getByTestId('clue')).toHaveCount(0);
 	await page.getByTestId('show-clue').tap();
 	await expect(page.getByTestId('clue')).toBeVisible();
+});
+
+test('a location with a start view opens the map there; untouched until the player pans', async ({ browser }) => {
+	const h = await getHost(browser);
+	// A region around (not on) the answer, Lake Bled at 46.36, 14.09.
+	const startView = { lat: 45.2, lng: 16.4, zoom: 6 };
+	const fixture = await createPhotoLocation(uniq('start'), { startView });
+	cleanups.push(fixture.cleanup);
+	const g = await game({ timerSeconds: 90, locationIds: [fixture.id] });
+	const { page } = await phone(browser);
+	const name = uniq('Sam');
+	await joinViaUi(page, g.code, name);
+	const me = await playerIdByNickname(g.id, name);
+	const idle = await phone(browser);
+	await joinViaUi(idle.page, g.code, uniq('Idle'));
+
+	await h.startRound(g.id);
+	await mapReady(page);
+	// Opening on the start view is not a guess.
+	const lock = page.getByTestId('lock-in');
+	await expect(page.getByTestId('round')).toHaveAttribute('data-touched', 'false');
+	await expect(lock).toBeDisabled();
+	await expect(lock).toContainText('Move the map to aim');
+	await page.waitForTimeout(GUESS_DEBOUNCE_WAIT);
+	expect(await currentGuess(g.id, me)).toBeNull();
+
+	await panMap(page, -30, 15);
+	await expect(page.getByTestId('round')).toHaveAttribute('data-touched', 'true');
+	await expect(lock).toBeEnabled();
+	await lock.tap();
+	await expect(page.getByTestId('locked-panel')).toBeVisible();
+	await expect.poll(async () => (await currentGuess(g.id, me))?.locked_at ?? null).not.toBeNull();
+	const guess = (await currentGuess(g.id, me))!;
+	expect(guess.touched).toBe(true);
+	expect(Math.abs(guess.lat - startView.lat)).toBeLessThan(2);
+	expect(Math.abs(guess.lng - startView.lng)).toBeLessThan(2);
+	// Far from where a round without a start view opens.
+	expect(Math.abs(guess.lat - WORLD_VIEW.center[1])).toBeGreaterThan(10);
 });
 
 test('Swedish phone: lobby and round in Swedish', async ({ browser }) => {
