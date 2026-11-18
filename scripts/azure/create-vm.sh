@@ -102,10 +102,12 @@ Done. Public address: $ADDRESS
 
 1. DOMAIN is either $FQDN as it is, or your own name: add an A record
    that points it at $ADDRESS and wait until it resolves.
-2. Give the first boot a couple of minutes to install Docker, then:
+2. Wait until the first boot has installed Docker (a couple of minutes), then log in. Log in
+   after it has finished: a session opened earlier is not in the docker group yet
+   ("permission denied ... docker.sock"); log out and in again if that happens.
 
+     ssh $ADMIN_USER@$ADDRESS cloud-init status --wait
      ssh $ADMIN_USER@$ADDRESS
-     cloud-init status --wait
      cd closest-wins
      cp .env.azure.example .env.azure && nano .env.azure
      docker compose -f compose.azure.yaml --env-file .env.azure up -d --build
