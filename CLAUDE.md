@@ -10,6 +10,10 @@ Read `INTEND.md` (product + rules) and the approved plan before changing behavio
    columns while a round is running. This applies to every role, including the host.
    A photo's attribution and source URL count as the answer too (they often name the place):
    a running round sends only the image (`CluePhotoView`); the credit appears from the reveal.
+   The location's optional start view (`start_lat`/`start_lng`/`start_zoom`, where the guess map
+   opens) is the only other location data sent during a running round: to players only
+   (`PlayerPhase` round variant, not `ActiveRound`), read from its own columns by the narrow
+   `startViews()` select in `library.ts`, never derived from the answer.
 2. **All content reads/writes go through `src/lib/server/content/`** (locations, playlists,
    photos). Admin remote functions and MCP tools both call it; validation lives once in
    `src/lib/content/schemas.ts`. Nothing else touches those tables, with one exception:
